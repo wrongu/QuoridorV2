@@ -1,4 +1,4 @@
-from graph_util import _is_reachable, _bfs_path, _bfs_search
+from graph_util import _is_reachable, _bfs_path, _bfs_search, _cuts_path
 
 
 def parse_loc(loc_str):
@@ -257,7 +257,17 @@ class Quoridor(object):
             for touching in TOUCHING_WALLS[mv]:
                 if touching in self.walls:
                     return False
-            # Check that wall does not cut off all paths to some goal for any player.
+            # (fast) check: nobody is cut off if no shortest paths are affected.
+            shortest_path_cut = False
+            cuts = WALL_CUTS[mv]
+            for i in range(len(self.players)):
+                if _cuts_path(self._shortest_paths[i], cuts[0]) or \
+                        _cuts_path(self._shortest_paths[i], cuts[1]):
+                    shortest_path_cut = True
+                    break
+            if not shortest_path_cut:
+                return True
+            # (slow) check that wall does not cut off all paths to some goal for any player.
             has_path = True
             self._cut(mv)
             for goals, player in zip(GOALS, self.players):
@@ -341,10 +351,6 @@ class Quoridor(object):
             cuts = WALL_CUTS[mv]
             for p in range(len(self.players)):
                 current_path = self._shortest_paths[p]
-                for i in range(len(current_path) - 1):
-                    path_1, path_2 = current_path[i], current_path[i + 1]
-                    if (path_1 in cuts[0] and path_2 in cuts[0]) or \
-                            (path_1 in cuts[1] and path_2 in cuts[1]):
+                if _cuts_path(current_path, cuts[0]) or _cuts_path(current_path, cuts[0]):
                         # Wall cuts this player's path. Recompute it.
                         self._shortest_paths[p] = self._get_path(p)
-                        break

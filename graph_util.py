@@ -32,6 +32,16 @@ def _bfs_path(bfs_tree, fro, to_set):
     return path
 
 
+def _cuts_path(path, cut):
+    """Given a path (list of locations) and a cut (a pair of adjacent locations), returns True iff
+       the given cut severs the path.
+    """
+    for i in range(len(path) - 1):
+        if path[i] in cut and path[i + 1] in cut:
+            return True
+    return False
+
+
 def _is_reachable(graph, fro, to_set):
     """Given an adjacency graph, starting location 'fro', and set of target locations, returns True
     iff at least one target in 'to_set' is reachable.
