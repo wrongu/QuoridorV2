@@ -276,6 +276,27 @@ class Quoridor(object):
     def all_legal_moves(self):
         return filter(self.is_legal, ALL_WALLS | ALL_POSITIONS)
 
+    def save(self, filename):
+        """Save moves to a file.
+        """
+        with open(filename, "w") as f:
+            f.write(str(len(self.players)) + "\n")
+            for mv in self.history:
+                if type(mv) is tuple:
+                    mv = encode_loc(*mv[1])
+                f.write(mv + "\n")
+
+    @classmethod
+    def load(cls, filename):
+        game = cls()
+        with open(filename, "r") as f:
+            lines = [l.strip() for l in f.readlines()]
+        if int(lines[0]) != 2:
+            raise ValueError("Only 2 players allowed.")
+        for mv in lines[1:]:
+            game.exec_move(mv)
+        return game
+
     ####################
     # HELPER FUNCTIONS #
     ####################
