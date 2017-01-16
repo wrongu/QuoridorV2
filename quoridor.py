@@ -1,4 +1,4 @@
-from graph_util import _is_reachable
+from graph_util import _is_reachable, _bfs_path, _bfs_search
 
 
 def parse_loc(loc_str):
@@ -128,6 +128,7 @@ class Quoridor(object):
 
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
+        self._shortest_paths = [self._get_path(i) for i in range(len(self.players))]
 
     def __eq__(self, other):
         return isinstance(other, Quoridor) and self.__key() == other.__key()
@@ -162,6 +163,7 @@ class Quoridor(object):
             # Record just the wall string in history.
             history_entry = mv
 
+        self._update_paths(self.current_player, mv)
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
         if not is_redo:
@@ -315,3 +317,34 @@ class Quoridor(object):
         for (loc1, loc2) in WALL_CUTS[wall]:
             self._adjacency_graph[loc1].add(loc2)
             self._adjacency_graph[loc2].add(loc1)
+
+    def _get_path(self, player_idx):
+        fro = self.players[player_idx][0]
+        goals = GOALS[player_idx]
+        tree = _bfs_search(self._adjacency_graph, fro, goals)
+        return _bfs_path(tree, fro, goals) or None
+
+    def _update_paths(self, player_idx, mv):
+        """(Maybe) update the shortest paths given that 'player_idx' just did 'mv'. The graph and
+           players' positions must already be updated.
+        """
+        current_path = self._shortest_paths[player_idx]
+        if len(mv) == 2:
+            if current_path[1] == parse_loc(mv):
+                # Player took a step along the path; shorten it by 1.
+                self._shortest_paths[player_idx] = current_path[1:]
+            else:
+                # Player took a step off their shortest path; recompute shortest.
+                self._shortest_paths[player_idx] = self._get_path(player_idx)
+        else:
+            # No update if wall doesn't affect path
+            cuts = WALL_CUTS[mv]
+            for p in range(len(self.players)):
+                current_path = self._shortest_paths[p]
+                for i in range(len(current_path) - 1):
+                    path_1, path_2 = current_path[i], current_path[i + 1]
+                    if (path_1 in cuts[0] and path_2 in cuts[0]) or \
+                            (path_1 in cuts[1] and path_2 in cuts[1]):
+                        # Wall cuts this player's path. Recompute it.
+                        self._shortest_paths[p] = self._get_path(p)
+                        break
