@@ -188,6 +188,7 @@ class Quoridor(object):
                 self._uncut(last_entry)
                 # Append wall string to redo stack.
                 self.redo_stack.append(last_entry)
+            self._shortest_paths[prev_player] = self._get_path(prev_player)
             self.current_player = prev_player
 
     def redo(self):
