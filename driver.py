@@ -197,8 +197,8 @@ class TkBoard(object):
         self.game_over = False
 
     def redo(self):
-        # TODO
-        pass
+        self.game.redo()
+        self.refresh()
 
     def draw_wall_counts(self):
         width, height = self.canvas_dims

@@ -122,6 +122,9 @@ class Quoridor(object):
         self.history = []
         self.current_player = 0
 
+        # "Forward" history for redo.
+        self.redo_stack = []
+
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
 
@@ -138,7 +141,7 @@ class Quoridor(object):
     # PUBLIC-FACING FUNCTIONS #
     ###########################
 
-    def exec_move(self, mv, check_legal=True):
+    def exec_move(self, mv, check_legal=True, is_redo=False):
         """Execute a move and update the state.
         """
         if check_legal and not self.is_legal(mv):
@@ -160,6 +163,8 @@ class Quoridor(object):
 
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
+        if not is_redo:
+            self.redo_stack = []
 
     def undo(self):
         """Undo the last move.
@@ -169,6 +174,8 @@ class Quoridor(object):
             last_entry = self.history.pop()
             if type(last_entry) is tuple:
                 self.players[prev_player][0] = last_entry[0]
+                # Append move string to redo stack.
+                self.redo_stack.append(encode_loc(*last_entry[1]))
             else:
                 # Remove the wall.
                 self.walls.discard(last_entry)
@@ -176,7 +183,15 @@ class Quoridor(object):
                 self.players[prev_player][1] += 1
                 # Repair the adjacency graph.
                 self._uncut(last_entry)
+                # Append wall string to redo stack.
+                self.redo_stack.append(last_entry)
             self.current_player = prev_player
+
+    def redo(self):
+        """Play forward from series of calls to undo().
+        """
+        if len(self.redo_stack) > 0:
+            self.exec_move(self.redo_stack.pop(), is_redo=True)
 
     def is_legal(self, mv):
         """Return True iff the given move is legal.
