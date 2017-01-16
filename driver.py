@@ -226,6 +226,7 @@ class TkBoard(object):
         if grid and self.moveType == "move":
             move_str = encode_loc(*grid)
             if move_str != self.active_move:
+                print move_str
                 self.active_move = move_str
                 if self.game.is_legal(move_str):
                     self.draw_player(grid, self.game.current_player, True)
@@ -238,6 +239,7 @@ class TkBoard(object):
             pos = encode_loc(*topleft)
             wall_str = pos + orient
             if wall_str != self.active_wall:
+                print wall_str
                 self.active_wall = wall_str
                 active_error = not self.game.is_legal(wall_str)
                 self.redraw_walls(active_error)

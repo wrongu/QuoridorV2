@@ -1,4 +1,4 @@
-from collections import deque
+from graph_util import _is_reachable
 
 
 def parse_loc(loc_str):
@@ -19,8 +19,10 @@ def cross(wall_str):
     return wall_str[0:2] + ('h' if wall_str[2] == 'v' else 'v')
 
 ALL_WALLS = set()
+ALL_POSITIONS = set()
 for row in range(9):
     for col in range(9):
+        ALL_POSITIONS.add(encode_loc(row, col))
         ALL_WALLS.add(encode_loc(row, col) + 'h')
         ALL_WALLS.add(encode_loc(row, col) + 'v')
 
@@ -73,25 +75,6 @@ def create_adjacency_graph():
     return adj
 
 
-def _is_reachable(graph, fro, to_set):
-    """Given an adjacency graph, starting location 'fro', and set of target locations, returns True
-    iff at least one target in 'to_set' is reachable.
-    """
-    if fro in to_set:
-        return True
-    deq = deque()
-    deq.append(fro)
-    visited = set([fro])
-    while len(deq) > 0:
-        for neighbor in graph[deq.pop()]:
-            if neighbor in to_set:
-                return True
-            if neighbor not in visited:
-                visited.add(neighbor)
-                deq.append(neighbor)
-    return False
-
-
 class IllegalMove(Exception):
     pass
 
@@ -141,6 +124,15 @@ class Quoridor(object):
 
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
+
+    def __eq__(self, other):
+        return isinstance(other, Quoridor) and self.__key() == other.__key()
+
+    def __hash__(self):
+        return hash(self.__key())
+
+    def __key(self):
+        return (self.current_player, frozenset(self.walls), tuple(map(tuple, self.players)))
 
     ###########################
     # PUBLIC-FACING FUNCTIONS #
@@ -266,6 +258,9 @@ class Quoridor(object):
                 return i
         return None
 
+    def all_legal_moves(self):
+        return filter(self.is_legal, ALL_WALLS | ALL_POSITIONS)
+
     ####################
     # HELPER FUNCTIONS #
     ####################
@@ -283,26 +278,3 @@ class Quoridor(object):
         for (loc1, loc2) in WALL_CUTS[wall]:
             self._adjacency_graph[loc1].add(loc2)
             self._adjacency_graph[loc2].add(loc1)
-
-
-class temp_move:
-    """Class providing do/undo functionality in a with statement.
-
-    For example:
-
-        game = Quoridor()
-        game.exec_move("b5")
-        with temp_move(game, "h5"):
-            print game.history[-1] # shows move to h5
-        print game.history[-1] # shows move to b5
-    """
-    def __init__(self, game, mv):
-        self.game = game
-        self.mv = mv
-
-    def __enter__(self):
-        self.game.exec_move(self.mv)
-        return self.game
-
-    def __exit__(self, type, value, traceback):
-        self.game.undo()
