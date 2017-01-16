@@ -23,8 +23,9 @@ ALL_POSITIONS = set()
 for row in range(9):
     for col in range(9):
         ALL_POSITIONS.add(encode_loc(row, col))
-        ALL_WALLS.add(encode_loc(row, col) + 'h')
-        ALL_WALLS.add(encode_loc(row, col) + 'v')
+        if row < 8 and col < 8:
+            ALL_WALLS.add(encode_loc(row, col) + 'h')
+            ALL_WALLS.add(encode_loc(row, col) + 'v')
 
 # Construct mapping from each wall to the set of walls that it physically rules out.
 TOUCHING_WALLS = {}
