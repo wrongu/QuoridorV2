@@ -1,4 +1,4 @@
-from graph_util import _is_reachable, _bfs_path, _bfs_search, _cuts_path
+from graph_util import PathGraph
 
 
 def parse_loc(loc_str):
@@ -128,7 +128,7 @@ class Quoridor(object):
 
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
-        self._shortest_paths = [self._get_path(i) for i in range(len(self.players))]
+        self._pathgraphs = [PathGraph(self._adjacency_graph, goals) for goals in GOALS]
 
     def __eq__(self, other):
         return isinstance(other, Quoridor) and self.__key() == other.__key()
@@ -163,7 +163,6 @@ class Quoridor(object):
             # Record just the wall string in history.
             history_entry = mv
 
-        self._update_paths(self.current_player, mv)
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
         if not is_redo:
@@ -184,7 +183,7 @@ class Quoridor(object):
                 self.walls.discard(last_entry)
                 # Add 1 back to count of remaining walls.
                 self.players[prev_player][1] += 1
-                # Repair the adjacency graph.
+                # Repair the adjacency graph. TODO pathgraph
                 self._uncut(last_entry)
                 # Append wall string to redo stack.
                 self.redo_stack.append(last_entry)
@@ -258,23 +257,10 @@ class Quoridor(object):
             for touching in TOUCHING_WALLS[mv]:
                 if touching in self.walls:
                     return False
-            # (fast) check: nobody is cut off if no shortest paths are affected.
-            shortest_path_cut = False
-            cuts = WALL_CUTS[mv]
-            for i in range(len(self.players)):
-                if _cuts_path(self._shortest_paths[i], cuts[0]) or \
-                        _cuts_path(self._shortest_paths[i], cuts[1]):
-                    shortest_path_cut = True
-                    break
-            if not shortest_path_cut:
-                return True
             # (slow) check that wall does not cut off all paths to some goal for any player.
-            has_path = True
             self._cut(mv)
-            for goals, player in zip(GOALS, self.players):
-                if not _is_reachable(self._adjacency_graph, player[0], goals):
-                    has_path = False
-                    break
+            has_path = all(graph.has_path(player[0])
+                           for (player, graph) in zip(self.players, self._pathgraphs))
             self._uncut(mv)
             return has_path
         else:
@@ -318,40 +304,13 @@ class Quoridor(object):
     def _cut(self, wall):
         """Cut the adjacency graph with the given wall.
         """
-        for (loc1, loc2) in WALL_CUTS[wall]:
-            self._adjacency_graph[loc1].discard(loc2)
-            self._adjacency_graph[loc2].discard(loc1)
+        for pair in WALL_CUTS[wall]:
+            for graph in self._pathgraphs:
+                graph.cut(pair)
 
     def _uncut(self, wall):
         """Repair adjacency graph (undo `_cut(wall)`)
         """
-        for (loc1, loc2) in WALL_CUTS[wall]:
-            self._adjacency_graph[loc1].add(loc2)
-            self._adjacency_graph[loc2].add(loc1)
-
-    def _get_path(self, player_idx):
-        fro = self.players[player_idx][0]
-        goals = GOALS[player_idx]
-        tree = _bfs_search(self._adjacency_graph, fro, goals)
-        return _bfs_path(tree, fro, goals) or None
-
-    def _update_paths(self, player_idx, mv):
-        """(Maybe) update the shortest paths given that 'player_idx' just did 'mv'. The graph and
-           players' positions must already be updated.
-        """
-        current_path = self._shortest_paths[player_idx]
-        if len(mv) == 2:
-            if current_path[1] == parse_loc(mv):
-                # Player took a step along the path; shorten it by 1.
-                self._shortest_paths[player_idx] = current_path[1:]
-            else:
-                # Player took a step off their shortest path; recompute shortest.
-                self._shortest_paths[player_idx] = self._get_path(player_idx)
-        else:
-            # No update if wall doesn't affect path
-            cuts = WALL_CUTS[mv]
-            for p in range(len(self.players)):
-                current_path = self._shortest_paths[p]
-                if _cuts_path(current_path, cuts[0]) or _cuts_path(current_path, cuts[0]):
-                        # Wall cuts this player's path. Recompute it.
-                        self._shortest_paths[p] = self._get_path(p)
+        for pair in WALL_CUTS[wall]:
+            for graph in self._pathgraphs:
+                graph.uncut(pair)
