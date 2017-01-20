@@ -28,5 +28,24 @@ class TestPathGraph(unittest.TestCase):
         self.pg.cut([(3, 4), (4, 4)])
         self.assertIsNone(self.pg._downhill[(3, 4)])
 
+    def testCutWithinCut(self):
+        self.pg.cut([(3, 4), (3, 3)])
+        self.pg.cut([(3, 4), (2, 4)])
+        self.pg.cut([(3, 4), (4, 4)])
+        self.pg.cut([(3, 5), (3, 6)])
+        self.pg.cut([(3, 5), (2, 5)])
+        self.pg.cut([(3, 5), (4, 5)])
+        # (3,4) and (3,5) are in a box disconnected from everything else.
+        self.assertEqual(len(self.graph[(3, 4)]), 1)
+        self.assertEqual(len(self.graph[(3, 5)]), 1)
+        self.assertIn((3, 5), self.graph[(3, 4)])
+        self.assertIn((3, 4), self.graph[(3, 5)])
+        self.assertIsNone(self.pg._downhill[(3, 4)])
+        self.assertIsNone(self.pg._downhill[(3, 5)])
+        self.assertEqual(len(self.pg._uphill[(3, 4)]), 0)
+        self.assertEqual(len(self.pg._uphill[(3, 5)]), 0)
+        # Now cut between (3, 4) and (3, 5)
+        self.pg.cut([(3, 4), (3, 5)])
+
 if __name__ == '__main__':
     unittest.main()
