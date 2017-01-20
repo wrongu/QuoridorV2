@@ -49,9 +49,9 @@ class PathGraph(object):
 
         # Check if cut is on some downhill path. If so, sever all connections upstream of it and
         # recompute paths for those nodes.
-        if self._downhill[pair[0]][1] == pair[1]:
+        if self._downhill[pair[0]] is not None and self._downhill[pair[0]][1] == pair[1]:
             self._reconnect_path(self._sever(pair[0]))
-        elif self._downhill[pair[1]][1] == pair[0]:
+        elif self._downhill[pair[1]] is not None and self._downhill[pair[1]][1] == pair[0]:
             self._reconnect_path(self._sever(pair[1]))
 
     def uncut(self, pair):
@@ -65,13 +65,13 @@ class PathGraph(object):
         if self._downhill[nodeA] is None or self._downhill[nodeB] is None:
             sev_node = nodeA if self._downhill[nodeA] is None else nodeB
             severed_nodes = set([sev_node])
-            fringe = deque(sev_node)
+            fringe = deque([sev_node])
             while len(fringe) > 0:
                 node = fringe.pop()
                 for neighbor in self._graph[node]:
                     if self._downhill[neighbor] is None and neighbor not in severed_nodes:
                         severed_nodes.add(neighbor)
-                        fringe.push(neighbor)
+                        fringe.append(neighbor)
             self._reconnect_path(severed_nodes)
 
         # Check if a shorter path now exists for nodeA through nodeB (or vice versa) and update
@@ -150,62 +150,3 @@ class PathGraph(object):
                     self._uphill[border_node].add(neighbor)
                     # Having added 'neighbor' to '_downhill', it now becomes part of the border.
                     heapq.heappush(border_heap, (dist + 1, neighbor))
-
-
-def _bfs_search(graph, fro, to_set):
-    """Given an adjacency graph, starting location 'fro', and set of target locations, returns True
-    iff at least one target in 'to_set' is reachable.
-    """
-    bfs_tree = {fro: None}
-    deq = deque([fro])
-    while len(deq) > 0:
-        v = deq.popleft()
-        if v in to_set:
-            return bfs_tree
-        for neighbor in graph[v]:
-            if neighbor not in bfs_tree:
-                deq.append(neighbor)
-                bfs_tree[neighbor] = v
-    return bfs_tree
-
-
-def _bfs_path(bfs_tree, fro, to_set):
-    """Given a bfs_tree (output from _bfs_search), returns the shortest path from 'fro' to an item
-    in to_set.
-    """
-    path = []
-    for target in to_set:
-        if target in bfs_tree:
-            path = [target]
-            while path[0] != fro:
-                path.insert(0, bfs_tree[path[0]])
-    return path
-
-
-def _cuts_path(path, cut):
-    """Given a path (list of locations) and a cut (a pair of adjacent locations), returns True iff
-       the given cut severs the path.
-    """
-    for i in range(len(path) - 1):
-        if path[i] in cut and path[i + 1] in cut:
-            return True
-    return False
-
-
-def _is_reachable(graph, fro, to_set):
-    """Given an adjacency graph, starting location 'fro', and set of target locations, returns True
-    iff at least one target in 'to_set' is reachable.
-    """
-    if fro in to_set:
-        return True
-    deq = deque()
-    deq.append(fro)
-    visited = set([fro])
-    while len(deq) > 0:
-        for neighbor in graph[deq.pop()]:
-            if neighbor in to_set:
-                return True
-            if neighbor not in visited:
-                visited.add(neighbor)
-                deq.append(neighbor)
-    return False
