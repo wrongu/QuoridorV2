@@ -168,6 +168,12 @@ class Quoridor(object):
         if not is_redo:
             self.redo_stack = []
 
+    def temp_move(self, mv):
+        """Execute the given move in a `with` context, where it automatically undoes itself when
+           the `with` is complete.
+        """
+        return Quoridor.TempMove(self, mv)
+
     def undo(self):
         """Undo the last move.
         """
@@ -187,7 +193,6 @@ class Quoridor(object):
                 self._uncut(last_entry)
                 # Append wall string to redo stack.
                 self.redo_stack.append(last_entry)
-            self._shortest_paths[prev_player] = self._get_path(prev_player)
             self.current_player = prev_player
 
     def redo(self):
@@ -314,3 +319,26 @@ class Quoridor(object):
         for pair in WALL_CUTS[wall]:
             for graph in self._pathgraphs:
                 graph.uncut(pair)
+
+    class TempMove:
+        """Class providing do/undo functionality in a with statement.
+
+        For example:
+
+            game = Quoridor()
+            game.exec_move("b5")
+            with temp_move(game, "h5"):
+                print game.history[-1] # shows move to h5
+            print game.history[-1] # shows move to b5
+        """
+        def __init__(self, game, mv):
+            self.game = game
+            self.mv = mv
+
+        def __enter__(self):
+            # TODO - cache
+            self.game.exec_move(self.mv, False)
+            return self.game
+
+        def __exit__(self, type, value, traceback):
+            self.game.undo()
