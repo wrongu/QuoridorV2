@@ -47,5 +47,13 @@ class TestPathGraph(unittest.TestCase):
         # Now cut between (3, 4) and (3, 5)
         self.pg.cut([(3, 4), (3, 5)])
 
+    def testEncloseSink(self):
+        self.pg.cut([(0, 4), (0, 5)])
+        self.pg.cut([(0, 5), (0, 6)])
+        self.pg.cut([(1, 4), (1, 5)])
+        self.pg.cut([(1, 5), (1, 6)])
+        self.pg.cut([(1, 5), (2, 5)])
+        self.assertEqual(self.pg.get_distance((1, 5)), 1)
+
 if __name__ == '__main__':
     unittest.main()

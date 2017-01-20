@@ -15,6 +15,8 @@ class PathGraph(object):
         # bidirectional (or, equivalently, undirected).
         self._graph = init_graph
 
+        self._sinks = set(sinks)
+
         # Downhill is a dict mapping each node to a tuple of (dist, next) in a shortest path to a
         # sink. When a node is 'severed', downhill[node] is None.
         self._downhill = {node: None for node in self._graph.keys()}
@@ -97,12 +99,18 @@ class PathGraph(object):
                     """
                     (node_dist, node_child) = self._downhill[node]
                     if node_dist > parent_dist + 1:
+                        # Recurse.
                         update_downhill(node, node_child, parent_dist + 1)
-                    self._downhill[node] = (parent_dist + 1, parent)
+                        # Route 'node' through 'parent'.
+                        self._downhill[node] = (parent_dist + 1, parent)
+                        self._uphill[parent].add(node)
+                        self._uphill[node].discard(parent)
 
-                # Update downhill.
+                # Possibly reverse nodes that are downhill from 'farther'.
                 update_downhill(closer, farther, dist_closer)
-                # Update uphill.
+                # Update distance counts uphill from 'farther' (note: this must happen after
+                # update_downhill in case any previously downhill nodes are now uphill from
+                # 'farther').
                 update_uphill(closer, farther, dist_closer)
 
     def _sever(self, node):
@@ -116,7 +124,7 @@ class PathGraph(object):
             # Recursively cut off upstream from here.
             severed_nodes |= self._sever(parent)
         # Cut off this node.
-        self._downhill[node] = None
+        self._downhill[node] = None if node not in self._sinks else (0, None)
         self._uphill[node] = set()
         return severed_nodes
 
