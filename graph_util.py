@@ -52,8 +52,10 @@ class PathGraph(object):
         # Check if cut is on some downhill path. If so, sever all connections upstream of it and
         # recompute paths for those nodes.
         if self._downhill[pair[0]] is not None and self._downhill[pair[0]][1] == pair[1]:
+            self._uphill[pair[1]].discard(pair[0])
             self._reconnect_path(self._sever(pair[0]))
         elif self._downhill[pair[1]] is not None and self._downhill[pair[1]][1] == pair[0]:
+            self._uphill[pair[0]].discard(pair[1])
             self._reconnect_path(self._sever(pair[1]))
 
     def uncut(self, pair):
@@ -102,6 +104,7 @@ class PathGraph(object):
                         # Recurse.
                         update_downhill(node, node_child, parent_dist + 1)
                         # Route 'node' through 'parent'.
+                        self._uphill[self._downhill[node][1]].discard(node)
                         self._downhill[node] = (parent_dist + 1, parent)
                         self._uphill[parent].add(node)
                         self._uphill[node].discard(parent)
