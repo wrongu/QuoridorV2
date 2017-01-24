@@ -1,5 +1,5 @@
 import unittest
-from quoridor import create_adjacency_graph
+from quoridor import create_adjacency_graph, WALL_CUTS
 from graph_util import PathGraph
 
 
@@ -54,6 +54,24 @@ class TestPathGraph(unittest.TestCase):
         self.pg.cut([(1, 5), (1, 6)])
         self.pg.cut([(1, 5), (2, 5)])
         self.assertEqual(self.pg.get_distance((1, 5)), 1)
+
+    def testUncut(self):
+        # Make a bunch of cuts including closing off a space, then undo and assert that the graph
+        # is restored after each uncut.
+        prev_downhills = []
+        prev_uphills = []
+        pairs = [[(3, 3), (3, 4)],
+                 [(3, 3), (4, 3)],
+                 [(3, 3), (2, 3)],
+                 [(3, 3), (3, 2)]]
+        for pair in pairs:
+            prev_downhills.append(self.pg._downhill.items())
+            prev_uphills.append(self.pg._downhill.items())
+            self.pg.cut(pair)
+        for pair in reversed(pairs):
+            self.pg.uncut(pair)
+            self.assertItemsEqual(prev_downhills.pop(), self.pg._downhill.items())
+            self.assertItemsEqual(prev_uphills.pop(), self.pg._downhill.items())
 
 if __name__ == '__main__':
     unittest.main()
