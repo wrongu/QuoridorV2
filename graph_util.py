@@ -161,3 +161,32 @@ class PathGraph(object):
                     self._uphill[border_node].add(neighbor)
                     # Having added 'neighbor' to '_downhill', it now becomes part of the border.
                     heapq.heappush(border_heap, (dist + 1, neighbor))
+
+    def _sanity_check(self):
+        err = False
+        for (node, next) in self._downhill.items():
+            if next is not None:
+                (dist, next) = next
+                if next is not None and next not in self._graph[node]:
+                    print "INCONSISTENCY: connectivity of graph and downhill.", node, next
+                    err = True
+                if next is not None and node not in self._graph[next]:
+                    print "INCONSISTENCY: reverse connectivity of graph and downhill."
+                    err = True
+                if next is not None and node not in self._uphill[next]:
+                    print "INCONSISTENCY:", node, "not in uphill[downhill[", node, "]]"
+                    err = True
+                if next is not None and dist != self._downhill[next][0] + 1:
+                    print "INCONSISTENCY: path lengths"
+                    err = True
+        for (node, parents) in self._uphill.items():
+            for par in parents:
+                if self._downhill[par] is None:
+                    print "INCONSISTENCY: uphill exists but not reciprocated"
+                    err = True
+                elif self._downhill[par][1] != node:
+                    print "INCONSISTENCY:", node, "not in downhill[uphill[", node, "]]"
+                    err = True
+        if err:
+            import pdb
+            pdb.set_trace()
