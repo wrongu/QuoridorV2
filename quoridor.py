@@ -325,7 +325,7 @@ class Quoridor(object):
 
             game = Quoridor()
             game.exec_move("b5")
-            with temp_move(game, "h5"):
+            with game.temp_move("h5"):
                 print game.history[-1] # shows move to h5
             print game.history[-1] # shows move to b5
         """
