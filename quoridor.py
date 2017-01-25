@@ -354,7 +354,17 @@ class Quoridor(object):
         return None
 
     def all_legal_moves(self):
-        return filter(self.is_legal, ALL_WALLS | ALL_POSITIONS)
+        (row, col) = self.players[self.current_player][0]
+        legal_moves = []
+        # Only check moves within +/- 1 space of the pawn.
+        for r in range(max(0, row - 1), min(8, row + 1)):
+            for c in range(max(0, col - 1), min(8, col + 1)):
+                mv = encode_loc(r, c)
+                if self.is_legal(mv):
+                    legal_moves.append(mv)
+        # Only check legality of 'open' wall spaces.
+        legal_walls = [w for w in self._open_walls if self.is_legal(w)]
+        return legal_moves + legal_walls
 
     def save(self, filename):
         """Save moves to a file.
