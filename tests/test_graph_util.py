@@ -12,29 +12,29 @@ class TestPathGraph(unittest.TestCase):
     def testCutNoPathChange(self):
         init_paths = self.pg._downhill.items()
         # Make a horizontal cut
-        self.pg.cut([(3, 4), (3, 5)])
+        self.pg.cut([[(3, 4), (3, 5)]])
         self.assertItemsEqual(init_paths, self.pg._downhill.items())
 
     def testCutSidestep(self):
-        init_dist = self.pg._downhill[(4, 4)][0]
-        self.pg.cut([(3, 4), (4, 4)])
-        self.assertIn(self.pg._downhill[(4, 4)][1], [(4, 3), (4, 5)])
-        self.assertEqual(self.pg._downhill[(4, 4)][0], init_dist + 1)
+        init_dist = self.pg._dist[(4, 4)]
+        self.pg.cut([[(3, 4), (4, 4)]])
+        self.assertIn(self.pg._downhill[(4, 4)], [(4, 3), (4, 5)])
+        self.assertEqual(self.pg._dist[(4, 4)], init_dist + 1)
 
     def testFullCutoff(self):
-        self.pg.cut([(3, 4), (3, 3)])
-        self.pg.cut([(3, 4), (3, 5)])
-        self.pg.cut([(3, 4), (2, 4)])
-        self.pg.cut([(3, 4), (4, 4)])
+        self.pg.cut([[(3, 4), (3, 3)]])
+        self.pg.cut([[(3, 4), (3, 5)]])
+        self.pg.cut([[(3, 4), (2, 4)]])
+        self.pg.cut([[(3, 4), (4, 4)]])
         self.assertIsNone(self.pg._downhill[(3, 4)])
 
     def testCutWithinCut(self):
-        self.pg.cut([(3, 4), (3, 3)])
-        self.pg.cut([(3, 4), (2, 4)])
-        self.pg.cut([(3, 4), (4, 4)])
-        self.pg.cut([(3, 5), (3, 6)])
-        self.pg.cut([(3, 5), (2, 5)])
-        self.pg.cut([(3, 5), (4, 5)])
+        self.pg.cut([[(3, 4), (3, 3)]])
+        self.pg.cut([[(3, 4), (2, 4)]])
+        self.pg.cut([[(3, 4), (4, 4)]])
+        self.pg.cut([[(3, 5), (3, 6)]])
+        self.pg.cut([[(3, 5), (2, 5)]])
+        self.pg.cut([[(3, 5), (4, 5)]])
         # (3,4) and (3,5) are in a box disconnected from everything else.
         self.assertEqual(len(self.graph[(3, 4)]), 1)
         self.assertEqual(len(self.graph[(3, 5)]), 1)
@@ -45,14 +45,14 @@ class TestPathGraph(unittest.TestCase):
         self.assertEqual(len(self.pg._uphill[(3, 4)]), 0)
         self.assertEqual(len(self.pg._uphill[(3, 5)]), 0)
         # Now cut between (3, 4) and (3, 5)
-        self.pg.cut([(3, 4), (3, 5)])
+        self.pg.cut([[(3, 4), (3, 5)]])
 
     def testEncloseSink(self):
-        self.pg.cut([(0, 4), (0, 5)])
-        self.pg.cut([(0, 5), (0, 6)])
-        self.pg.cut([(1, 4), (1, 5)])
-        self.pg.cut([(1, 5), (1, 6)])
-        self.pg.cut([(1, 5), (2, 5)])
+        self.pg.cut([[(0, 4), (0, 5)]])
+        self.pg.cut([[(0, 5), (0, 6)]])
+        self.pg.cut([[(1, 4), (1, 5)]])
+        self.pg.cut([[(1, 5), (1, 6)]])
+        self.pg.cut([[(1, 5), (2, 5)]])
         self.assertEqual(self.pg.get_distance((1, 5)), 1)
 
     def testUncut(self):
@@ -67,9 +67,9 @@ class TestPathGraph(unittest.TestCase):
         for pair in pairs:
             prev_downhills.append(self.pg._downhill.items())
             prev_uphills.append(self.pg._downhill.items())
-            self.pg.cut(pair)
+            self.pg.cut([pair])
         for pair in reversed(pairs):
-            self.pg.uncut(pair)
+            self.pg.uncut([pair])
             self.assertItemsEqual(prev_downhills.pop(), self.pg._downhill.items())
             self.assertItemsEqual(prev_uphills.pop(), self.pg._downhill.items())
 
