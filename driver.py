@@ -155,9 +155,9 @@ class TkBoard(object):
         if self.disp_flow:
             graph = self.game._pathgraphs[self.game.current_player]
             for (cur, next) in graph._downhill.items():
-                if next is not None and next[1] is not None:
+                if next is not None:
                     (x0, y0) = self.grid_to_point(cur)
-                    (x1, y1) = self.grid_to_point(next[1])
+                    (x1, y1) = self.grid_to_point(next)
                     self.flow_lines.append(self.tk_canv.create_line(x0, y0, x1, y1, fill='green'))
 
     def new_rect_button(self, text, fill, x0, y0, x1, y1, callback):
