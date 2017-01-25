@@ -45,79 +45,84 @@ class PathGraph(object):
         """
         return self._downhill[node] is not None
 
-    def cut(self, pair):
-        """Given pair of adjacent nodes, cuts connections between them from the graph.
+    def cut(self, pairs):
+        """Given pairs of adjacent nodes, cuts connections between them from the graph.
         """
         # TODO - optional cache for uncut.
-        self._graph[pair[0]].discard(pair[1])
-        self._graph[pair[1]].discard(pair[0])
+        severed_nodes = set()
+        for pair in pairs:
+            nodeA, nodeB = pair
+            self._graph[nodeA].discard(nodeB)
+            self._graph[nodeB].discard(nodeA)
 
-        # Check if cut is on some downhill path. If so, sever all connections upstream of it and
-        # recompute paths for those nodes.
-        if self._downhill[pair[0]] == pair[1]:
-            self._uphill[pair[1]].discard(pair[0])
-            self._reconnect_path(self._sever(pair[0]))
-        elif self._downhill[pair[1]] == pair[0]:
-            self._uphill[pair[0]].discard(pair[1])
-            self._reconnect_path(self._sever(pair[1]))
+            # Check if cut is on some downhill path. If so, sever all connections upstream of it
+            # and recompute paths for those nodes.
+            if self._downhill[nodeA] == nodeB:
+                self._uphill[nodeB].discard(nodeA)
+                severed_nodes |= self._sever(nodeA)
+            elif self._downhill[nodeB] == nodeA:
+                self._uphill[nodeA].discard(nodeB)
+                severed_nodes |= self._sever(nodeB)
+        self._reconnect_path(severed_nodes)
 
-    def uncut(self, pair):
+    def uncut(self, pairs):
         """Opposite of cut().
         """
-        nodeA, nodeB = pair
-        self._graph[nodeA].add(nodeB)
-        self._graph[nodeB].add(nodeA)
+        for pair in pairs:
+            nodeA, nodeB = pair
+            self._graph[nodeA].add(nodeB)
+            self._graph[nodeB].add(nodeA)
 
-        # Re-attach nodes that had been completely cut off.
-        if self._downhill[nodeA] is None or self._downhill[nodeB] is None:
-            sev_node = nodeA if self._downhill[nodeA] is None else nodeB
-            severed_nodes = set([sev_node])
-            fringe = deque([sev_node])
-            while len(fringe) > 0:
-                node = fringe.pop()
-                for neighbor in self._graph[node]:
-                    if self._downhill[neighbor] is None and neighbor not in severed_nodes:
-                        severed_nodes.add(neighbor)
-                        fringe.append(neighbor)
-            self._reconnect_path(severed_nodes)
+            # Re-attach nodes that had been completely cut off.
+            if self._downhill[nodeA] is None or self._downhill[nodeB] is None:
+                sev_node = nodeA if self._downhill[nodeA] is None else nodeB
+                severed_nodes = set([sev_node])
+                fringe = deque([sev_node])
+                while len(fringe) > 0:
+                    node = fringe.pop()
+                    for neighbor in self._graph[node]:
+                        if self._downhill[neighbor] is None and neighbor not in severed_nodes:
+                            severed_nodes.add(neighbor)
+                            fringe.append(neighbor)
+                self._reconnect_path(severed_nodes)
 
-        # Check if a shorter path now exists for nodeA through nodeB (or vice versa) and update
-        # paths if so. Need to search in both directions. Downhill paths might be reversed, and
-        # uphill nodes will need their distances updated.
-        else:
-            distA, distB = self._dist[nodeA], self._dist[nodeB]
-            if abs(distA - distB) > 1:
-                closer, farther = (nodeA, nodeB) if distA < distB else (nodeB, nodeA)
-                dist_closer = min(distA, distB)
+            # Check if a shorter path now exists for nodeA through nodeB (or vice versa) and update
+            # paths if so. Need to search in both directions. Downhill paths might be reversed, and
+            # uphill nodes will need their distances updated.
+            else:
+                distA, distB = self._dist[nodeA], self._dist[nodeB]
+                if abs(distA - distB) > 1:
+                    closer, farther = (nodeA, nodeB) if distA < distB else (nodeB, nodeA)
+                    dist_closer = min(distA, distB)
 
-                def update_uphill(parent, node, parent_dist):
-                    """Recursively update upstream from node (where 'parent' is one step downhill
-                       from node).
-                    """
-                    self._dist[node], self._downhill[node] = parent_dist + 1, parent
-                    for up in self._uphill[node]:
-                        update_uphill(node, up, parent_dist + 1)
-
-                def update_downhill(parent, node, parent_dist):
-                    """Recursively reverse the downhill direction from parent to node, stopping
-                       when we are no longer shortening paths by reversing them.
-                    """
-                    node_dist, node_child = self._dist[node], self._downhill[node]
-                    if node_dist > parent_dist + 1:
-                        # Recurse.
-                        update_downhill(node, node_child, parent_dist + 1)
-                        # Route 'node' through 'parent'.
-                        self._uphill[self._downhill[node].discard(node)
+                    def update_uphill(parent, node, parent_dist):
+                        """Recursively update upstream from node (where 'parent' is one step
+                           downhill from node).
+                        """
                         self._dist[node], self._downhill[node] = parent_dist + 1, parent
-                        self._uphill[parent].add(node)
-                        self._uphill[node].discard(parent)
+                        for up in self._uphill[node]:
+                            update_uphill(node, up, parent_dist + 1)
 
-                # Possibly reverse nodes that are downhill from 'farther'.
-                update_downhill(closer, farther, dist_closer)
-                # Update distance counts uphill from 'farther' (note: this must happen after
-                # update_downhill in case any previously downhill nodes are now uphill from
-                # 'farther').
-                update_uphill(closer, farther, dist_closer)
+                    def update_downhill(parent, node, parent_dist):
+                        """Recursively reverse the downhill direction from parent to node, stopping
+                           when we are no longer shortening paths by reversing them.
+                        """
+                        node_dist, node_child = self._dist[node], self._downhill[node]
+                        if node_dist > parent_dist + 1:
+                            # Recurse.
+                            update_downhill(node, node_child, parent_dist + 1)
+                            # Route 'node' through 'parent'.
+                            self._uphill[self._downhill[node].discard(node)
+                            self._dist[node], self._downhill[node] = parent_dist + 1, parent
+                            self._uphill[parent].add(node)
+                            self._uphill[node].discard(parent)
+
+                    # Possibly reverse nodes that are downhill from 'farther'.
+                    update_downhill(closer, farther, dist_closer)
+                    # Update distance counts uphill from 'farther' (note: this must happen after
+                    # update_downhill in case any previously downhill nodes are now uphill from
+                    # 'farther').
+                    update_uphill(closer, farther, dist_closer)
 
     def _sever(self, node):
         """Walk upstream from the given node, 'severing' each from _downhill and _uphill.

@@ -309,16 +309,14 @@ class Quoridor(object):
     def _cut(self, wall):
         """Cut the adjacency graph with the given wall.
         """
-        for pair in WALL_CUTS[wall]:
-            for graph in self._pathgraphs:
-                graph.cut(pair)
+        for graph in self._pathgraphs:
+            graph.cut(WALL_CUTS[wall])
 
     def _uncut(self, wall):
         """Repair adjacency graph (undo `_cut(wall)`)
         """
-        for pair in WALL_CUTS[wall]:
-            for graph in self._pathgraphs:
-                graph.uncut(pair)
+        for graph in self._pathgraphs:
+            graph.uncut(WALL_CUTS[wall])
 
     class TempMove:
         """Class providing do/undo functionality in a with statement.
