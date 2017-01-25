@@ -62,6 +62,12 @@ for wall in ALL_WALLS:
         # 'T' below
         if row <= 7:
             TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'h')
+        # 'T' left
+        if col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
+        # 'T' right
+        if col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
         # 'L' above-left
         if row >= 1 and col >= 1:
             TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'h')
@@ -87,6 +93,12 @@ for wall in ALL_WALLS:
         # 'T' right
         if col <= 7:
             TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'v')
+        # 'T' above
+        if row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
+        # 'T' below
+        if row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
         # 'L' left-above
         if col >= 1 and row >= 1:
             TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'v')
