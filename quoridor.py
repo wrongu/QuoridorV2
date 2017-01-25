@@ -29,20 +29,76 @@ for row in range(9):
 
 # Construct mapping from each wall to the set of walls that it physically rules out (including
 # itself).
-TOUCHING_WALLS = {}
+INTERSECTING_WALLS = {}
 for wall in ALL_WALLS:
-    TOUCHING_WALLS[wall] = set([wall, cross(wall)])
+    INTERSECTING_WALLS[wall] = set([wall, cross(wall)])
     (row, col) = parse_loc(wall[0:2])
     if wall[2] == 'v':
         if row > 0:
-            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
+            INTERSECTING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
         if row < 7 and wall[2]:
-            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
+            INTERSECTING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
     elif wall[2] == 'h':
         if col > 0:
-            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
+            INTERSECTING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
         if col < 7:
-            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
+            INTERSECTING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
+
+# Construct mapping from each wall to the set of walls that it legally touches (colinear, L, or T)
+TOUCHING_WALLS = {}
+for wall in ALL_WALLS:
+    TOUCHING_WALLS[wall] = set()
+    (row, col) = parse_loc(wall[0:2])
+    if wall[2] == 'v':
+        # Colinear above
+        if row >= 2:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 2, col) + 'v')
+        # Colinear below
+        if row <= 6:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 2, col) + 'v')
+        # 'T' above
+        if row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'h')
+        # 'T' below
+        if row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'h')
+        # 'L' above-left
+        if row >= 1 and col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'h')
+        # 'L' above-right
+        if row >= 1 and col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col + 1) + 'h')
+        # 'L' below-left
+        if row <= 7 and col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col - 1) + 'h')
+        # 'L' below-right
+        if row <= 7 and col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col + 1) + 'h')
+    if wall[2] == 'h':
+        # Colinear left
+        if col >= 2:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 2) + 'h')
+        # Colinear below
+        if col <= 6:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 2) + 'h')
+        # 'T' left
+        if col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'v')
+        # 'T' right
+        if col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'v')
+        # 'L' left-above
+        if col >= 1 and row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'v')
+        # 'L' left-below
+        if col >= 1 and row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col - 1) + 'v')
+        # 'L' right-above
+        if col <= 7 and row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col + 1) + 'v')
+        # 'L' right-below
+        if col <= 7 and row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col + 1) + 'v')
 
 # Construct mapping from each wall to a list of the pairs of locations that it cuts off.
 WALL_CUTS = {}
@@ -165,7 +221,7 @@ class Quoridor(object):
             # Record just the wall string in history.
             history_entry = mv
             # Update list of 'open' wall spaces.
-            self._open_walls -= TOUCHING_WALLS[mv]
+            self._open_walls -= INTERSECTING_WALLS[mv]
 
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
@@ -200,10 +256,10 @@ class Quoridor(object):
                 if allow_redo:
                     self.redo_stack.append(last_entry)
                 # Add back in 'open' walls.
-                for maybe_open in TOUCHING_WALLS[last_entry]:
+                for maybe_open in INTERSECTING_WALLS[last_entry]:
                     # Each of the walls touching 'last_entry' may be ruled out by some other played
                     # wall.
-                    if all(w not in self.walls for w in TOUCHING_WALLS[maybe_open]):
+                    if all(w not in self.walls for w in INTERSECTING_WALLS[maybe_open]):
                         self._open_walls.add(maybe_open)
             self.current_player = prev_player
 
@@ -271,15 +327,22 @@ class Quoridor(object):
             if row < 0 or col < 0 or row > 7 or col > 7:
                 return False
             # Check that wall does not physically intersect with any wall that has been played.
-            for touching in TOUCHING_WALLS[mv]:
-                if touching in self.walls:
-                    return False
-            # (slow) check that wall does not cut off all paths to some goal for any player.
-            self._cut(mv)
-            has_path = all(graph.has_path(player[0])
-                           for (player, graph) in zip(self.players, self._pathgraphs))
-            self._uncut(mv)
-            return has_path
+            if mv not in self._open_walls:
+                return False
+            # (slow) check that wall does not cut off all paths to some goal for any player. Note:
+            # (only needs to be checked if 'mv' is 'touching' to some existing wall).
+            check_cut = False
+            for wall in TOUCHING_WALLS[mv]:
+                if wall in self.walls:
+                    check_cut = True
+                    break
+            if check_cut:
+                self._cut(mv)
+                has_path = all(graph.has_path(player[0])
+                               for (player, graph) in zip(self.players, self._pathgraphs))
+                self._uncut(mv)
+                return has_path
+            return True
         else:
             return False
         return True
