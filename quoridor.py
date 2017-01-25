@@ -27,21 +27,22 @@ for row in range(9):
             ALL_WALLS.add(encode_loc(row, col) + 'h')
             ALL_WALLS.add(encode_loc(row, col) + 'v')
 
-# Construct mapping from each wall to the set of walls that it physically rules out.
+# Construct mapping from each wall to the set of walls that it physically rules out (including
+# itself).
 TOUCHING_WALLS = {}
 for wall in ALL_WALLS:
-    TOUCHING_WALLS[wall] = [wall, cross(wall)]
+    TOUCHING_WALLS[wall] = set([wall, cross(wall)])
     (row, col) = parse_loc(wall[0:2])
     if wall[2] == 'v':
         if row > 0:
-            TOUCHING_WALLS[wall].append(encode_loc(row - 1, col) + 'v')
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
         if row < 7 and wall[2]:
-            TOUCHING_WALLS[wall].append(encode_loc(row + 1, col) + 'v')
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
     elif wall[2] == 'h':
         if col > 0:
-            TOUCHING_WALLS[wall].append(encode_loc(row, col - 1) + 'h')
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
         if col < 7:
-            TOUCHING_WALLS[wall].append(encode_loc(row, col + 1) + 'h')
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
 
 # Construct mapping from each wall to a list of the pairs of locations that it cuts off.
 WALL_CUTS = {}
@@ -129,6 +130,7 @@ class Quoridor(object):
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
         self._pathgraphs = [PathGraph(self._adjacency_graph, goals) for goals in GOALS]
+        self._open_walls = set(ALL_WALLS)
 
     def __eq__(self, other):
         return isinstance(other, Quoridor) and self.__key() == other.__key()
@@ -162,6 +164,8 @@ class Quoridor(object):
             self._cut(mv)
             # Record just the wall string in history.
             history_entry = mv
+            # Update list of 'open' wall spaces.
+            self._open_walls -= TOUCHING_WALLS[mv]
 
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
@@ -174,7 +178,7 @@ class Quoridor(object):
         """
         return Quoridor.TempMove(self, mv)
 
-    def undo(self):
+    def undo(self, allow_redo=True):
         """Undo the last move.
         """
         if len(self.history) > 0:
@@ -183,7 +187,8 @@ class Quoridor(object):
             if type(last_entry) is tuple:
                 self.players[prev_player][0] = last_entry[0]
                 # Append move string to redo stack.
-                self.redo_stack.append(encode_loc(*last_entry[1]))
+                if allow_redo:
+                    self.redo_stack.append(encode_loc(*last_entry[1]))
             else:
                 # Remove the wall.
                 self.walls.discard(last_entry)
@@ -192,7 +197,14 @@ class Quoridor(object):
                 # Repair the adjacency graph. TODO pathgraph
                 self._uncut(last_entry)
                 # Append wall string to redo stack.
-                self.redo_stack.append(last_entry)
+                if allow_redo:
+                    self.redo_stack.append(last_entry)
+                # Add back in 'open' walls.
+                for maybe_open in TOUCHING_WALLS[last_entry]:
+                    # Each of the walls touching 'last_entry' may be ruled out by some other played
+                    # wall.
+                    if all(w not in self.walls for w in TOUCHING_WALLS[maybe_open]):
+                        self._open_walls.add(maybe_open)
             self.current_player = prev_player
 
     def redo(self):
@@ -335,8 +347,8 @@ class Quoridor(object):
 
         def __enter__(self):
             # TODO - cache
-            self.game.exec_move(self.mv, False)
+            self.game.exec_move(self.mv, check_legal=False, is_redo=True)
             return self.game
 
         def __exit__(self, type, value, traceback):
-            self.game.undo()
+            self.game.undo(allow_redo=False)
