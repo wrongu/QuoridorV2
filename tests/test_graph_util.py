@@ -55,7 +55,13 @@ class TestPathGraph(unittest.TestCase):
         self.pg.cut([[(1, 5), (2, 5)]])
         self.assertEqual(self.pg.get_distance((1, 5)), 1)
 
-    def testUncut(self):
+    def testSimpleUncut(self):
+        init_paths = self.pg._downhill.items()
+        self.pg.cut([[(3, 3), (4, 3)], [(3, 4), (4, 4)]])
+        self.pg.uncut([[(3, 3), (4, 3)], [(3, 4), (4, 4)]])
+        self.assertItemsEqual(init_paths, self.pg._downhill.items())
+
+    def testUncutEnclosed(self):
         # Make a bunch of cuts including closing off a space, then undo and assert that the graph
         # is restored after each uncut.
         prev_downhills = []
