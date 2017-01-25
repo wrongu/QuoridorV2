@@ -17,11 +17,15 @@ class PathGraph(object):
 
         self._sinks = set(sinks)
 
-        # Downhill is a dict mapping each node to a tuple of (dist, next) in a shortest path to a
-        # sink. When a node is 'severed', downhill[node] is None.
+        # Distance from each node to a sink along its 'downhill' path, or -1 if not connected.
+        self._dist = {node: -1 for node in self._graph.keys()}
+
+        # Downhill is a dict mapping each node to the next node in a shortest path to a
+        # sink. When a node is 'severed', downhill[node] is None. Sinks point to themselves.
         self._downhill = {node: None for node in self._graph.keys()}
         for sink in sinks:
-            self._downhill[sink] = (0, None)
+            self._downhill[sink] = sink
+            self._dist[sink] = 0
 
         # Uphill is the inverse of _downhill, but maps to sets of nodes since _downhill may be
         # many-to-one.
@@ -34,8 +38,7 @@ class PathGraph(object):
         """Get distance from node to nearest sink (number of steps to get there), or -1 if
            unreachable.
         """
-        path_info = self._downhill[node]
-        return path_info[0] if path_info is not None else -1
+        return self._dist[node]
 
     def has_path(self, node):
         """Return True iff there exists a path from node to a sink.
@@ -51,10 +54,10 @@ class PathGraph(object):
 
         # Check if cut is on some downhill path. If so, sever all connections upstream of it and
         # recompute paths for those nodes.
-        if self._downhill[pair[0]] is not None and self._downhill[pair[0]][1] == pair[1]:
+        if self._downhill[pair[0]] == pair[1]:
             self._uphill[pair[1]].discard(pair[0])
             self._reconnect_path(self._sever(pair[0]))
-        elif self._downhill[pair[1]] is not None and self._downhill[pair[1]][1] == pair[0]:
+        elif self._downhill[pair[1]] == pair[0]:
             self._uphill[pair[0]].discard(pair[1])
             self._reconnect_path(self._sever(pair[1]))
 
@@ -82,7 +85,7 @@ class PathGraph(object):
         # paths if so. Need to search in both directions. Downhill paths might be reversed, and
         # uphill nodes will need their distances updated.
         else:
-            distA, distB = self._downhill[nodeA][0], self._downhill[nodeB][0]
+            distA, distB = self._dist[nodeA], self._dist[nodeB]
             if abs(distA - distB) > 1:
                 closer, farther = (nodeA, nodeB) if distA < distB else (nodeB, nodeA)
                 dist_closer = min(distA, distB)
@@ -91,7 +94,7 @@ class PathGraph(object):
                     """Recursively update upstream from node (where 'parent' is one step downhill
                        from node).
                     """
-                    self._downhill[node] = (parent_dist + 1, parent)
+                    self._dist[node], self._downhill[node] = parent_dist + 1, parent
                     for up in self._uphill[node]:
                         update_uphill(node, up, parent_dist + 1)
 
@@ -99,13 +102,13 @@ class PathGraph(object):
                     """Recursively reverse the downhill direction from parent to node, stopping
                        when we are no longer shortening paths by reversing them.
                     """
-                    (node_dist, node_child) = self._downhill[node]
+                    node_dist, node_child = self._dist[node], self._downhill[node]
                     if node_dist > parent_dist + 1:
                         # Recurse.
                         update_downhill(node, node_child, parent_dist + 1)
                         # Route 'node' through 'parent'.
-                        self._uphill[self._downhill[node][1]].discard(node)
-                        self._downhill[node] = (parent_dist + 1, parent)
+                        self._uphill[self._downhill[node].discard(node)
+                        self._dist[node], self._downhill[node] = parent_dist + 1, parent
                         self._uphill[parent].add(node)
                         self._uphill[node].discard(parent)
 
@@ -127,7 +130,8 @@ class PathGraph(object):
             # Recursively cut off upstream from here.
             severed_nodes |= self._sever(parent)
         # Cut off this node.
-        self._downhill[node] = None if node not in self._sinks else (0, None)
+        if node not in self._sinks:
+            self._dist[node], self._downhill[node] = 0, None
         self._uphill[node] = set()
         return severed_nodes
 
@@ -148,8 +152,7 @@ class PathGraph(object):
                     border.add(neighbor)
                     # The heap will sort by the first item in the tuple then the second, so we put
                     # 'dist' in the first slot to sort by distance.
-                    (dist, _) = self._downhill[neighbor]
-                    heapq.heappush(border_heap, (dist, neighbor))
+                    heapq.heappush(border_heap, (self._dist[neighbor], neighbor))
 
         # Build _downhill and _uphill from shortest to longest.
         while len(severed_nodes) > 0 and len(border_heap) > 0:
@@ -157,7 +160,8 @@ class PathGraph(object):
             for neighbor in self._graph[border_node]:
                 if neighbor in severed_nodes:
                     severed_nodes.discard(neighbor)
-                    self._downhill[neighbor] = (dist + 1, border_node)
+                    self._dist[neighbor] = dist + 1
+                    self._downhill[neighbor] = border_node
                     self._uphill[border_node].add(neighbor)
                     # Having added 'neighbor' to '_downhill', it now becomes part of the border.
                     heapq.heappush(border_heap, (dist + 1, neighbor))
@@ -166,7 +170,7 @@ class PathGraph(object):
         err = False
         for (node, next) in self._downhill.items():
             if next is not None:
-                (dist, next) = next
+                dist = self._dist[node]
                 if next is not None and next not in self._graph[node]:
                     print "INCONSISTENCY: connectivity of graph and downhill.", node, next
                     err = True
@@ -176,7 +180,7 @@ class PathGraph(object):
                 if next is not None and node not in self._uphill[next]:
                     print "INCONSISTENCY:", node, "not in uphill[downhill[", node, "]]"
                     err = True
-                if next is not None and dist != self._downhill[next][0] + 1:
+                if next is not None and dist != self._dist[next] + 1:
                     print "INCONSISTENCY: path lengths"
                     err = True
         for (node, parents) in self._uphill.items():
@@ -184,7 +188,7 @@ class PathGraph(object):
                 if self._downhill[par] is None:
                     print "INCONSISTENCY: uphill exists but not reciprocated"
                     err = True
-                elif self._downhill[par][1] != node:
+                elif self._downhill[par] != node:
                     print "INCONSISTENCY:", node, "not in downhill[uphill[", node, "]]"
                     err = True
         if err:
