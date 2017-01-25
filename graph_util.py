@@ -112,7 +112,7 @@ class PathGraph(object):
                             # Recurse.
                             update_downhill(node, node_child, parent_dist + 1)
                             # Route 'node' through 'parent'.
-                            self._uphill[self._downhill[node].discard(node)
+                            self._uphill[self._downhill[node]].discard(node)
                             self._dist[node], self._downhill[node] = parent_dist + 1, parent
                             self._uphill[parent].add(node)
                             self._uphill[node].discard(parent)
