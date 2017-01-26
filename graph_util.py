@@ -49,7 +49,9 @@ class PathGraph(object):
         """Given pairs of adjacent nodes, cuts connections between them from the graph.
         """
         # TODO - optional cache for uncut.
+
         severed_nodes = set()
+
         for pair in pairs:
             nodeA, nodeB = pair
             self._graph[nodeA].discard(nodeB)
@@ -173,17 +175,17 @@ class PathGraph(object):
         for (node, next) in self._downhill.items():
             if next is not None:
                 dist = self._dist[node]
-                if next is not None and next not in self._graph[node]:
+                if next is not None and next not in self._graph[node] and node not in self._sinks:
                     print "INCONSISTENCY: connectivity of graph and downhill.", node, next
                     err = True
-                if next is not None and node not in self._graph[next]:
+                if next is not None and node not in self._graph[next] and next not in self._sinks:
                     print "INCONSISTENCY: reverse connectivity of graph and downhill."
                     err = True
-                if next is not None and node not in self._uphill[next]:
+                if node not in self._sinks and next is not None and node not in self._uphill[next]:
                     print "INCONSISTENCY:", node, "not in uphill[downhill[", node, "]]"
                     err = True
-                if next is not None and dist != self._dist[next] + 1:
-                    print "INCONSISTENCY: path lengths"
+                if node not in self._sinks and next is not None and dist != self._dist[next] + 1:
+                    print "INCONSISTENCY: path lengths", node, dist, "->", next, self._dist[next]
                     err = True
         for (node, parents) in self._uphill.items():
             for par in parents:
