@@ -68,6 +68,8 @@ class PathGraph(object):
     def uncut(self, pairs):
         """Opposite of cut().
         """
+        search_fringe = deque()
+        search_visited = set()
         for pair in pairs:
             nodeA, nodeB = pair
             self._graph[nodeA].add(nodeB)
@@ -93,36 +95,31 @@ class PathGraph(object):
                 distA, distB = self._dist[nodeA], self._dist[nodeB]
                 if abs(distA - distB) > 1:
                     closer, farther = (nodeA, nodeB) if distA < distB else (nodeB, nodeA)
-                    dist_closer = min(distA, distB)
+                    # Route 'farther' through 'closer'.
+                    self._reroute(farther, closer)
+                    # Add 'farther' to the set of fringe to search from.
+                    search_fringe.append(farther)
+                    search_visited.add(closer)
+        # Search out from updated nodes - update all paths that can be made shorter.
+        while len(search_fringe) > 0:
+            node = search_fringe.popleft()
+            node_dist = self._dist[node]
+            for neighbor in self._graph[node] - search_visited:
+                search_visited.add(neighbor)
+                if self._dist[neighbor] > node_dist + 1:
+                    # Route 'neighbor' through 'node'
+                    self._reroute(neighbor, node)
+                    # Search further from neighbor.
+                    search_fringe.append(neighbor)
 
-                    def update_uphill(parent, node, parent_dist):
-                        """Recursively update upstream from node (where 'parent' is one step
-                           downhill from node).
-                        """
-                        self._dist[node], self._downhill[node] = parent_dist + 1, parent
-                        for up in self._uphill[node]:
-                            update_uphill(node, up, parent_dist + 1)
-
-                    def update_downhill(parent, node, parent_dist):
-                        """Recursively reverse the downhill direction from parent to node, stopping
-                           when we are no longer shortening paths by reversing them.
-                        """
-                        node_dist, node_child = self._dist[node], self._downhill[node]
-                        if node_dist > parent_dist + 1:
-                            # Recurse.
-                            update_downhill(node, node_child, parent_dist + 1)
-                            # Route 'node' through 'parent'.
-                            self._uphill[self._downhill[node]].discard(node)
-                            self._dist[node], self._downhill[node] = parent_dist + 1, parent
-                            self._uphill[parent].add(node)
-                            self._uphill[node].discard(parent)
-
-                    # Possibly reverse nodes that are downhill from 'farther'.
-                    update_downhill(closer, farther, dist_closer)
-                    # Update distance counts uphill from 'farther' (note: this must happen after
-                    # update_downhill in case any previously downhill nodes are now uphill from
-                    # 'farther').
-                    update_uphill(closer, farther, dist_closer)
+    def _reroute(self, fro, to):
+        """Helper function to route 'fro' through 'to' (assuming it's valid on the graph), updating
+           instance variables as necessary.
+        """
+        self._dist[fro] = self._dist[to] + 1
+        self._uphill[self._downhill[fro]].discard(fro)
+        self._downhill[fro] = to
+        self._uphill[to].add(fro)
 
     def _sever(self, node):
         """Walk upstream from the given node, 'severing' each from _downhill and _uphill.
