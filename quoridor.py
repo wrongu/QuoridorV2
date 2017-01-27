@@ -343,12 +343,27 @@ class Quoridor(object):
                 return False
             # (slow) check that wall does not cut off all paths to some goal for any player. Note:
             # (only needs to be checked if 'mv' is 'touching' to some existing wall).
-            check_cut = False
+            touching_wall, shortest_path_cut = False, False
             for wall in TOUCHING_WALLS[mv]:
                 if wall in self.walls:
-                    check_cut = True
+                    touching_wall = True
                     break
-            if check_cut:
+            # Note 2: we may skip checking this wall if it doesn't cut any player's shortest path.
+            if touching_wall:
+                cuts = WALL_CUTS[mv]
+                for (player, graph) in zip(self.players, self._pathgraphs):
+                    current = player[0]
+                    for next in graph.get_path(current):
+                        if [current, next] in cuts or [next, current] in cuts:
+                            # The wall cuts this player's path..
+                            shortest_path_cut = True
+                            break
+                        current = next
+                    if shortest_path_cut:
+                        break
+            # After 2 tests, it's plausible that this wall cuts off a player. Do a full (slow) call
+            # to cut() to check.
+            if touching_wall and shortest_path_cut:
                 self._cut(mv)
                 has_path = all(graph.has_path(player[0])
                                for (player, graph) in zip(self.players, self._pathgraphs))

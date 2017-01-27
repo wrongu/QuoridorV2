@@ -45,6 +45,13 @@ class PathGraph(object):
         """
         return self._downhill[node] is not None
 
+    def get_path(self, node):
+        """Generator of shortest path from node to a sink, inclusive of the sink but not the node.
+        """
+        while node not in self._sinks:
+            node = self._downhill[node]
+            yield node
+
     def cut(self, pairs):
         """Given pairs of adjacent nodes, cuts connections between them from the graph.
         """
