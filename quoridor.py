@@ -1,4 +1,4 @@
-from graph_util import _is_reachable, _bfs_path, _bfs_search, _cuts_path
+from graph_util import PathGraph
 
 
 def parse_loc(loc_str):
@@ -27,21 +27,90 @@ for row in range(9):
             ALL_WALLS.add(encode_loc(row, col) + 'h')
             ALL_WALLS.add(encode_loc(row, col) + 'v')
 
-# Construct mapping from each wall to the set of walls that it physically rules out.
-TOUCHING_WALLS = {}
+# Construct mapping from each wall to the set of walls that it physically rules out (including
+# itself).
+INTERSECTING_WALLS = {}
 for wall in ALL_WALLS:
-    TOUCHING_WALLS[wall] = [wall, cross(wall)]
+    INTERSECTING_WALLS[wall] = set([wall, cross(wall)])
     (row, col) = parse_loc(wall[0:2])
     if wall[2] == 'v':
         if row > 0:
-            TOUCHING_WALLS[wall].append(encode_loc(row - 1, col) + 'v')
+            INTERSECTING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
         if row < 7 and wall[2]:
-            TOUCHING_WALLS[wall].append(encode_loc(row + 1, col) + 'v')
+            INTERSECTING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
     elif wall[2] == 'h':
         if col > 0:
-            TOUCHING_WALLS[wall].append(encode_loc(row, col - 1) + 'h')
+            INTERSECTING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
         if col < 7:
-            TOUCHING_WALLS[wall].append(encode_loc(row, col + 1) + 'h')
+            INTERSECTING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
+
+# Construct mapping from each wall to the set of walls that it legally touches (colinear, L, or T)
+TOUCHING_WALLS = {}
+for wall in ALL_WALLS:
+    TOUCHING_WALLS[wall] = set()
+    (row, col) = parse_loc(wall[0:2])
+    if wall[2] == 'v':
+        # Colinear above
+        if row >= 2:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 2, col) + 'v')
+        # Colinear below
+        if row <= 6:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 2, col) + 'v')
+        # 'T' above
+        if row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'h')
+        # 'T' below
+        if row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'h')
+        # 'T' left
+        if col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'h')
+        # 'T' right
+        if col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'h')
+        # 'L' above-left
+        if row >= 1 and col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'h')
+        # 'L' above-right
+        if row >= 1 and col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col + 1) + 'h')
+        # 'L' below-left
+        if row <= 7 and col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col - 1) + 'h')
+        # 'L' below-right
+        if row <= 7 and col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col + 1) + 'h')
+    if wall[2] == 'h':
+        # Colinear left
+        if col >= 2:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 2) + 'h')
+        # Colinear below
+        if col <= 6:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 2) + 'h')
+        # 'T' left
+        if col >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col - 1) + 'v')
+        # 'T' right
+        if col <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row, col + 1) + 'v')
+        # 'T' above
+        if row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col) + 'v')
+        # 'T' below
+        if row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col) + 'v')
+        # 'L' left-above
+        if col >= 1 and row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col - 1) + 'v')
+        # 'L' left-below
+        if col >= 1 and row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col - 1) + 'v')
+        # 'L' right-above
+        if col <= 7 and row >= 1:
+            TOUCHING_WALLS[wall].add(encode_loc(row - 1, col + 1) + 'v')
+        # 'L' right-below
+        if col <= 7 and row <= 7:
+            TOUCHING_WALLS[wall].add(encode_loc(row + 1, col + 1) + 'v')
 
 # Construct mapping from each wall to a list of the pairs of locations that it cuts off.
 WALL_CUTS = {}
@@ -128,7 +197,8 @@ class Quoridor(object):
 
         # Efficiency helpers.
         self._adjacency_graph = create_adjacency_graph()
-        self._shortest_paths = [self._get_path(i) for i in range(len(self.players))]
+        self._pathgraphs = [PathGraph(self._adjacency_graph, goals) for goals in GOALS]
+        self._open_walls = set(ALL_WALLS)
 
     def __eq__(self, other):
         return isinstance(other, Quoridor) and self.__key() == other.__key()
@@ -162,14 +232,21 @@ class Quoridor(object):
             self._cut(mv)
             # Record just the wall string in history.
             history_entry = mv
+            # Update list of 'open' wall spaces.
+            self._open_walls -= INTERSECTING_WALLS[mv]
 
-        self._update_paths(self.current_player, mv)
         self.history.append(history_entry)
         self.current_player = (self.current_player + 1) % len(self.players)
         if not is_redo:
             self.redo_stack = []
 
-    def undo(self):
+    def temp_move(self, mv):
+        """Execute the given move in a `with` context, where it automatically undoes itself when
+           the `with` is complete.
+        """
+        return Quoridor.TempMove(self, mv)
+
+    def undo(self, allow_redo=True):
         """Undo the last move.
         """
         if len(self.history) > 0:
@@ -178,17 +255,24 @@ class Quoridor(object):
             if type(last_entry) is tuple:
                 self.players[prev_player][0] = last_entry[0]
                 # Append move string to redo stack.
-                self.redo_stack.append(encode_loc(*last_entry[1]))
+                if allow_redo:
+                    self.redo_stack.append(encode_loc(*last_entry[1]))
             else:
                 # Remove the wall.
                 self.walls.discard(last_entry)
                 # Add 1 back to count of remaining walls.
                 self.players[prev_player][1] += 1
-                # Repair the adjacency graph.
+                # Repair the adjacency graph. TODO pathgraph
                 self._uncut(last_entry)
                 # Append wall string to redo stack.
-                self.redo_stack.append(last_entry)
-            self._shortest_paths[prev_player] = self._get_path(prev_player)
+                if allow_redo:
+                    self.redo_stack.append(last_entry)
+                # Add back in 'open' walls.
+                for maybe_open in INTERSECTING_WALLS[last_entry]:
+                    # Each of the walls touching 'last_entry' may be ruled out by some other played
+                    # wall.
+                    if all(w not in self.walls for w in INTERSECTING_WALLS[maybe_open]):
+                        self._open_walls.add(maybe_open)
             self.current_player = prev_player
 
     def redo(self):
@@ -255,28 +339,37 @@ class Quoridor(object):
             if row < 0 or col < 0 or row > 7 or col > 7:
                 return False
             # Check that wall does not physically intersect with any wall that has been played.
-            for touching in TOUCHING_WALLS[mv]:
-                if touching in self.walls:
-                    return False
-            # (fast) check: nobody is cut off if no shortest paths are affected.
-            shortest_path_cut = False
-            cuts = WALL_CUTS[mv]
-            for i in range(len(self.players)):
-                if _cuts_path(self._shortest_paths[i], cuts[0]) or \
-                        _cuts_path(self._shortest_paths[i], cuts[1]):
-                    shortest_path_cut = True
+            if mv not in self._open_walls:
+                return False
+            # (slow) check that wall does not cut off all paths to some goal for any player. Note:
+            # (only needs to be checked if 'mv' is 'touching' to some existing wall).
+            touching_wall, shortest_path_cut = False, False
+            for wall in TOUCHING_WALLS[mv]:
+                if wall in self.walls:
+                    touching_wall = True
                     break
-            if not shortest_path_cut:
-                return True
-            # (slow) check that wall does not cut off all paths to some goal for any player.
-            has_path = True
-            self._cut(mv)
-            for goals, player in zip(GOALS, self.players):
-                if not _is_reachable(self._adjacency_graph, player[0], goals):
-                    has_path = False
-                    break
-            self._uncut(mv)
-            return has_path
+            # Note 2: we may skip checking this wall if it doesn't cut any player's shortest path.
+            if touching_wall:
+                cuts = WALL_CUTS[mv]
+                for (player, graph) in zip(self.players, self._pathgraphs):
+                    current = player[0]
+                    for next in graph.get_path(current):
+                        if [current, next] in cuts or [next, current] in cuts:
+                            # The wall cuts this player's path..
+                            shortest_path_cut = True
+                            break
+                        current = next
+                    if shortest_path_cut:
+                        break
+            # After 2 tests, it's plausible that this wall cuts off a player. Do a full (slow) call
+            # to cut() to check.
+            if touching_wall and shortest_path_cut:
+                self._cut(mv)
+                has_path = all(graph.has_path(player[0])
+                               for (player, graph) in zip(self.players, self._pathgraphs))
+                self._uncut(mv)
+                return has_path
+            return True
         else:
             return False
         return True
@@ -288,7 +381,17 @@ class Quoridor(object):
         return None
 
     def all_legal_moves(self):
-        return filter(self.is_legal, ALL_WALLS | ALL_POSITIONS)
+        (row, col) = self.players[self.current_player][0]
+        legal_moves = []
+        # Only check moves within +/- 1 space of the pawn.
+        for r in range(max(0, row - 1), min(8, row + 1)):
+            for c in range(max(0, col - 1), min(8, col + 1)):
+                mv = encode_loc(r, c)
+                if self.is_legal(mv):
+                    legal_moves.append(mv)
+        # Only check legality of 'open' wall spaces.
+        legal_walls = [w for w in self._open_walls if self.is_legal(w)]
+        return legal_moves + legal_walls
 
     def save(self, filename):
         """Save moves to a file.
@@ -318,40 +421,34 @@ class Quoridor(object):
     def _cut(self, wall):
         """Cut the adjacency graph with the given wall.
         """
-        for (loc1, loc2) in WALL_CUTS[wall]:
-            self._adjacency_graph[loc1].discard(loc2)
-            self._adjacency_graph[loc2].discard(loc1)
+        for graph in self._pathgraphs:
+            graph.cut(WALL_CUTS[wall])
 
     def _uncut(self, wall):
         """Repair adjacency graph (undo `_cut(wall)`)
         """
-        for (loc1, loc2) in WALL_CUTS[wall]:
-            self._adjacency_graph[loc1].add(loc2)
-            self._adjacency_graph[loc2].add(loc1)
+        for graph in self._pathgraphs:
+            graph.uncut(WALL_CUTS[wall])
 
-    def _get_path(self, player_idx):
-        fro = self.players[player_idx][0]
-        goals = GOALS[player_idx]
-        tree = _bfs_search(self._adjacency_graph, fro, goals)
-        return _bfs_path(tree, fro, goals) or None
+    class TempMove:
+        """Class providing do/undo functionality in a with statement.
 
-    def _update_paths(self, player_idx, mv):
-        """(Maybe) update the shortest paths given that 'player_idx' just did 'mv'. The graph and
-           players' positions must already be updated.
+        For example:
+
+            game = Quoridor()
+            game.exec_move("b5")
+            with game.temp_move("h5"):
+                print game.history[-1] # shows move to h5
+            print game.history[-1] # shows move to b5
         """
-        current_path = self._shortest_paths[player_idx]
-        if len(mv) == 2:
-            if current_path[1] == parse_loc(mv):
-                # Player took a step along the path; shorten it by 1.
-                self._shortest_paths[player_idx] = current_path[1:]
-            else:
-                # Player took a step off their shortest path; recompute shortest.
-                self._shortest_paths[player_idx] = self._get_path(player_idx)
-        else:
-            # No update if wall doesn't affect path
-            cuts = WALL_CUTS[mv]
-            for p in range(len(self.players)):
-                current_path = self._shortest_paths[p]
-                if _cuts_path(current_path, cuts[0]) or _cuts_path(current_path, cuts[0]):
-                        # Wall cuts this player's path. Recompute it.
-                        self._shortest_paths[p] = self._get_path(p)
+        def __init__(self, game, mv):
+            self.game = game
+            self.mv = mv
+
+        def __enter__(self):
+            # TODO - cache
+            self.game.exec_move(self.mv, check_legal=False, is_redo=True)
+            return self.game
+
+        def __exit__(self, type, value, traceback):
+            self.game.undo(allow_redo=False)

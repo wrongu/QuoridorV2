@@ -20,7 +20,7 @@ def alphabeta_search(game, eval_fn, max_depth=4):
             return eval_fn(game, player)
         v = -INFINITY
         for mv in game.all_legal_moves():
-            with temp_move(game, mv):
+            with game.temp_move(mv):
                 hsh = hash(game)
                 if hsh in visited:
                     continue
@@ -37,7 +37,7 @@ def alphabeta_search(game, eval_fn, max_depth=4):
             return eval_fn(game, player)
         v = INFINITY
         for mv in game.all_legal_moves():
-            with temp_move(game, mv):
+            with game.temp_move(mv):
                 hsh = hash(game)
                 if hsh in visited:
                     continue
@@ -54,7 +54,7 @@ def alphabeta_search(game, eval_fn, max_depth=4):
     # Body of alphabeta_search starts here:
     best = (-INFINITY, None)
     for mv in game.all_legal_moves():
-        with temp_move(game, mv):
+        with game.temp_move(mv):
             hsh = hash(game)
             if hsh in visited:
                 continue
@@ -64,26 +64,3 @@ def alphabeta_search(game, eval_fn, max_depth=4):
         if v > best[0]:
             best = (v, mv)
     return mv
-
-
-class temp_move:
-    """Class providing do/undo functionality in a with statement.
-
-    For example:
-
-        game = Quoridor()
-        game.exec_move("b5")
-        with temp_move(game, "h5"):
-            print game.history[-1] # shows move to h5
-        print game.history[-1] # shows move to b5
-    """
-    def __init__(self, game, mv):
-        self.game = game
-        self.mv = mv
-
-    def __enter__(self):
-        self.game.exec_move(self.mv, False)
-        return self.game
-
-    def __exit__(self, type, value, traceback):
-        self.game.undo()

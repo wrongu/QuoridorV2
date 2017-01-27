@@ -44,6 +44,7 @@ class TkBoard(object):
     squares = [[0] * 9] * 9
     goal_squares = []
     wall_labels = []
+    flow_lines = []
     grid = None
     canvas_dims = (0, 0)
     buttons = []  # will contain bbox and callback as tuple for each button
@@ -52,6 +53,7 @@ class TkBoard(object):
     active_move = ""
     recent_x = 0
     recent_y = 0
+    disp_flow = False
 
     # GAME-INTERACTION VARIABLES
     gs = None
@@ -90,6 +92,7 @@ class TkBoard(object):
         self.tk_root.bind("r", lambda e: self.redo())
         self.tk_root.bind("<Enter>", lambda e: self.refresh())
         self.tk_root.bind("t", lambda e: self.disp_time_stats())
+        self.tk_root.bind("f", lambda e: self.toggle_flow())
         self.thread_kill = False
 
         self.time_stats = []
@@ -132,6 +135,7 @@ class TkBoard(object):
         self.redraw_walls(False)
         self.draw_current_player_icon()
         self.draw_wall_counts()
+        self.draw_flow()
 
     def draw_current_player_icon(self):
         width, height = self.canvas_dims
@@ -144,6 +148,17 @@ class TkBoard(object):
         if self.icon:
             self.tk_canv.delete(self.icon)
         self.icon = oval
+
+    def draw_flow(self):
+        for line in self.flow_lines:
+            self.tk_canv.delete(line)
+        if self.disp_flow:
+            graph = self.game._pathgraphs[self.game.current_player]
+            for (cur, next) in graph._downhill.items():
+                if next is not None:
+                    (x0, y0) = self.grid_to_point(cur)
+                    (x1, y1) = self.grid_to_point(next)
+                    self.flow_lines.append(self.tk_canv.create_line(x0, y0, x1, y1, fill='green'))
 
     def new_rect_button(self, text, fill, x0, y0, x1, y1, callback):
         hover_lighten = TkBoard.alpha_hax(fill, "#FFFFFF", 0.25)
@@ -163,6 +178,10 @@ class TkBoard(object):
             self.set_movetype("move")
         elif self.moveType == "move":
             self.set_movetype("wall")
+        self.refresh()
+
+    def toggle_flow(self):
+        self.disp_flow = not self.disp_flow
         self.refresh()
 
     def draw_panel(self):
@@ -226,7 +245,6 @@ class TkBoard(object):
         if grid and self.moveType == "move":
             move_str = encode_loc(*grid)
             if move_str != self.active_move:
-                print move_str
                 self.active_move = move_str
                 if self.game.is_legal(move_str):
                     self.draw_player(grid, self.game.current_player, True)
@@ -239,7 +257,6 @@ class TkBoard(object):
             pos = encode_loc(*topleft)
             wall_str = pos + orient
             if wall_str != self.active_wall:
-                print wall_str
                 self.active_wall = wall_str
                 active_error = not self.game.is_legal(wall_str)
                 self.redraw_walls(active_error)
