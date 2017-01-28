@@ -393,6 +393,12 @@ class Quoridor(object):
         legal_walls = [w for w in self._open_walls if self.is_legal(w)]
         return legal_moves + legal_walls
 
+    def get_player(self, player_idx=None):
+        return self.players[self.current_player if player_idx is None else player_idx]
+
+    def get_graph(self, player_idx=None):
+        return self._pathgraphs[self.current_player if player_idx is None else player_idx]
+
     def save(self, filename):
         """Save moves to a file.
         """
