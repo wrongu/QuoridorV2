@@ -1,3 +1,6 @@
+import numpy as np
+from collections import defaultdict
+from operator import itemgetter
 INFINITY = 1e9
 
 
@@ -64,3 +67,37 @@ def alphabeta_search(game, eval_fn, max_depth=4):
         if v > best[0]:
             best = (v, mv)
     return mv
+
+
+def monte_carlo_tree_search(game, eval_fn, policy_fn, max_depth=10, n_search=1000):
+    """Monte Carlo Tree Search, where moves are selected according to policy_fn, playouts go to a
+       depth of max_depth, at which point states are evaluated with eval_fn (as defined in
+       alphabeta_search). policy_fn must take in a 'game' and return a list of (mv, prob) tuples.
+    """
+    player = game.current_player
+    mv_scores = defaultdict(lambda: 0)
+    n_visit = defaultdict(lambda: 0)
+
+    def sample_move(game):
+        moves, probabilities = zip(*policy_fn(game))
+        probabilities = [p / sum(probabilities) for p in probabilities]
+        choice_idx = np.random.choice(len(moves), p=probabilities)
+        return moves[choice_idx]
+
+    def recursive_search(game, remaining_depth):
+        if (remaining_depth == 0) or (game.get_winner() is not None):
+            return eval_fn(game, player)
+        else:
+            with game.temp_move(sample_move(game)):
+                return recursive_search(game, remaining_depth - 1)
+
+    for i in range(n_search):
+        init_mv = sample_move(game)
+        with game.temp_move(init_mv):
+            score = recursive_search(game, max_depth)
+            n = n_visit[init_mv]
+            mv_scores[init_mv] = (n_visit[init_mv] * mv_scores[init_mv] + score) / (n + 1.0)
+            n_visit[init_mv] += 1
+
+    # Choose max value move.
+    return max(mv_scores.items(), key=itemgetter(1))[0]
