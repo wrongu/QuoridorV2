@@ -82,6 +82,8 @@ def monte_carlo_tree_search(game, eval_fn, policy_fn, max_depth=10, n_search=100
         moves, probabilities = zip(*policy_fn(game))
         probabilities = [p / sum(probabilities) for p in probabilities]
         choice_idx = np.random.choice(len(moves), p=probabilities)
+        while not game.is_legal(moves[choice_idx]):
+            choice_idx = np.random.choice(len(moves), p=probabilities)
         return moves[choice_idx]
 
     def recursive_search(game, remaining_depth):

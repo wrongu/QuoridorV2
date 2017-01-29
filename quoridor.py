@@ -380,7 +380,7 @@ class Quoridor(object):
                 return i
         return None
 
-    def all_legal_moves(self):
+    def all_legal_moves(self, partial_check=False):
         (row, col) = self.players[self.current_player][0]
         legal_moves = []
         # Only check moves within +/- 1 space of the pawn.
@@ -390,7 +390,10 @@ class Quoridor(object):
                 if self.is_legal(mv):
                     legal_moves.append(mv)
         # Only check legality of 'open' wall spaces.
-        legal_walls = [w for w in self._open_walls if self.is_legal(w)]
+        if partial_check:
+            legal_walls = list(self._open_walls)
+        else:
+            legal_walls = [w for w in self._open_walls if self.is_legal(w)]
         return legal_moves + legal_walls
 
     def get_player(self, player_idx=None):
