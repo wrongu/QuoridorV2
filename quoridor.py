@@ -221,13 +221,13 @@ class Quoridor(object):
         if len(mv) == 2:
             # Move the pawn.
             (row, col) = parse_loc(mv)
-            history_entry = (self.players[self.current_player][0], (row, col))
-            self.players[self.current_player][0] = (row, col)
+            history_entry = (self.get_player()[0], (row, col))
+            self.get_player()[0] = (row, col)
         else:
             # Place a wall.
             self.walls.add(mv)
             # Subtract 1 from count of remaining walls for this player.
-            self.players[self.current_player][1] -= 1
+            self.get_player()[1] -= 1
             # Cut the adjacency graph.
             self._cut(mv)
             # Record just the wall string in history.
@@ -289,7 +289,7 @@ class Quoridor(object):
             # Check that move is on the board
             if row < 0 or col < 0 or row > 8 or col > 8:
                 return False
-            cur_loc = self.players[self.current_player][0]
+            cur_loc = self.get_player()[0]
             other_player_locs = set([p[0] for p in self.players])
             adjacent_player_locs = other_player_locs & self._adjacency_graph[cur_loc]
             # Check that another player is not in the position.
@@ -333,7 +333,7 @@ class Quoridor(object):
         elif len(mv) == 3:
             (row, col) = parse_loc(mv[0:2])
             # Check that player has a wall to spare.
-            if not self.players[self.current_player][1] > 0:
+            if not self.get_player()[1] > 0:
                 return False
             # Check that wall is on the board.
             if row < 0 or col < 0 or row > 7 or col > 7:
@@ -381,15 +381,18 @@ class Quoridor(object):
         return None
 
     def all_legal_moves(self, partial_check=False):
-        (row, col) = self.players[self.current_player][0]
+        (row, col) = self.get_player()[0]
         legal_moves = []
         # Only check moves within +/- 1 space of the pawn.
-        for r in range(max(0, row - 1), min(8, row + 1)):
-            for c in range(max(0, col - 1), min(8, col + 1)):
+        for r in range(max(0, row - 2), min(8, row + 2) + 1):
+            for c in range(max(0, col - 2), min(8, col + 2) + 1):
                 mv = encode_loc(r, c)
                 if self.is_legal(mv):
                     legal_moves.append(mv)
         # Only check legality of 'open' wall spaces.
+        if self.get_player()[1] == 0:
+            # no walls available.
+            return legal_moves
         if partial_check:
             legal_walls = list(self._open_walls)
         else:
