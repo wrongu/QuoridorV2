@@ -58,6 +58,9 @@ class TkBoard(object):
     recent_x = 0
     recent_y = 0
     disp_flow = False
+    save_file = None
+    ai_depth = 6
+    ai_n_playout = 5000
 
     # GAME-INTERACTION VARIABLES
     moveType = "move"
@@ -74,7 +77,7 @@ class TkBoard(object):
             if k in self.DEFAULT_COLORS.keys():
                 self.DEFAULT_COLORS[k] = new_colors_dict[k]
 
-    def new_game(self, np=2, nai=0):
+    def new_game(self, ai=0, load_file=None, save_file=None, **kwargs):
         """Destroy old board, draw new board, update object state with new board
         """
         if self.tk_root:
@@ -113,26 +116,33 @@ class TkBoard(object):
         self.generate_walls()
 
         self.game = Quoridor()
+        self.save_file = save_file
+        if load_file is not None:
+            self.game = Quoridor.load(load_file)
         self.players = [(None, None)] * len(self.game.players)
         self.max_walls = self.game.players[0][1]
         self.wall_labels = [None] * len(self.game.players)
         self.draw_panel()
-        self.ai_threads = [None] * nai
-        self.ai_players = range(nai)
+        self.ai_threads = [None] * ai
+        self.ai_players = range(ai)
         self.ai_running = False
+        self.ai_depth = kwargs.get('ai_depth', self.ai_depth)
+        self.ai_n_playout = kwargs.get('ai_n_playout', self.ai_n_playout)
 
         self.draw_squares()
         self.draw_goals()
         self.generate_walls()
         self.refresh()
 
-        if nai > 0:
+        if ai > 0:
             self.start_ai(0)
 
         self.tk_root.focus_force()
         self.tk_root.mainloop()
 
     def handle_quit(self):
+        if self.save_file is not None:
+            self.game.save(self.save_file)
         self.tk_root.destroy()
 
     def refresh(self):
@@ -360,7 +370,8 @@ class TkBoard(object):
 
     def start_ai(self, player_idx):
         def get_and_exec_move(game):
-            mv = monte_carlo_tree_search(game, simple_value, simple_policy, 15, 10000)
+            mv = monte_carlo_tree_search(game, simple_value, simple_policy,
+                                         self.ai_depth, self.ai_n_playout)
             self.ai_running = False
             self.exec_wrapper(mv, is_ai=True)
             print "AI FINISHED"
@@ -532,17 +543,14 @@ class TkBoard(object):
         print self.time_stats
 
 if __name__ == "__main__":
-    n = 2
-    if len(argv) > 1:
-        try:
-            n = int(argv[1])
-        except:
-            pass
-    nai = 0
-    if len(argv) > 2:
-        try:
-            nai = int(argv[2])
-        except:
-            pass
+    import argparse
+    parser = argparse.ArgumentParser(description='Graphical interface for local Quoridor game.')
+    parser.add_argument("--ai", help="number of AI players (Default: 0)", type=int, default=0)
+    parser.add_argument("--ai-depth", help="AI players' search depth (Default: 6)", type=int, default=6)  # noqa: E501
+    parser.add_argument("--ai-n-playout", help="AI players' number of playouts (Default: 5000)", type=int, default=5000)  # noqa: E501
+    parser.add_argument("--save-file", help=".qdr file path of where to save results on quit.")
+    parser.add_argument("--load-file", help=".qdr file path of game to load.")
+    args = parser.parse_args()
+
     tkb = TkBoard()
-    tkb.new_game(n, nai)
+    tkb.new_game(**vars(args))
