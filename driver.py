@@ -1,7 +1,11 @@
 from Tkinter import *
-from quoridor import *
 from math import floor
+from quoridor import *
+from features import simple_policy, simple_value
+from threading import Thread
 from sys import argv
+from ai import monte_carlo_tree_search
+from copy import deepcopy
 
 
 class TkBoard(object):
@@ -56,7 +60,6 @@ class TkBoard(object):
     disp_flow = False
 
     # GAME-INTERACTION VARIABLES
-    gs = None
     moveType = "move"
     game_over = False
 
@@ -114,11 +117,17 @@ class TkBoard(object):
         self.max_walls = self.game.players[0][1]
         self.wall_labels = [None] * len(self.game.players)
         self.draw_panel()
+        self.ai_threads = [None] * nai
+        self.ai_players = range(nai)
+        self.ai_running = False
 
         self.draw_squares()
         self.draw_goals()
         self.generate_walls()
         self.refresh()
+
+        if nai > 0:
+            self.start_ai(0)
 
         self.tk_root.focus_force()
         self.tk_root.mainloop()
@@ -132,10 +141,10 @@ class TkBoard(object):
         self.active_wall = ""
         self.active_move = ""
         self.draw_players()
-        self.redraw_walls(False)
         self.draw_current_player_icon()
         self.draw_wall_counts()
         self.draw_flow()
+        self.redraw_walls(False)
 
     def draw_current_player_icon(self):
         width, height = self.canvas_dims
@@ -237,7 +246,7 @@ class TkBoard(object):
             y += self.LABEL_SPACING + self.LABEL_FONT_SIZE
 
     def handle_mouse_motion(self, x, y):
-        if self.game_over:
+        if self.game_over or self.ai_running:
             return
         self.recent_x = x
         self.recent_y = y
@@ -330,20 +339,36 @@ class TkBoard(object):
         if self.active_wall:
             self.wall_on(self.active_wall, active_error)
 
-    def exec_wrapper(self, turn_str):
+    def exec_wrapper(self, turn_str, is_ai=False):
         try:
+            if self.ai_running:
+                return False
             self.game.exec_move(turn_str)
             winner = self.game.get_winner()
             if winner is not None:
                 self.game_over = True
                 print "GAME OVER"
             self.refresh()
+            if self.game.current_player in self.ai_players:
+                self.start_ai(self.game.current_player)
             return True
         except IllegalMove:
             print "ILLEGAL MOVE: %s" % turn_str
             return False
         print "FAILED"
         return False
+
+    def start_ai(self, player_idx):
+        def get_and_exec_move(game):
+            mv = monte_carlo_tree_search(game, simple_value, simple_policy, 15, 10000)
+            self.ai_running = False
+            self.exec_wrapper(mv, is_ai=True)
+            print "AI FINISHED"
+        self.ai_threads[player_idx] = Thread(target=get_and_exec_move, args=(deepcopy(self.game),))
+        self.ai_threads[player_idx].daemon = True
+        self.ai_running = True
+        self.ai_threads[player_idx].start()
+        print "AI STARTED"
 
     def draw_squares(self):
         for r in range(9):
@@ -513,5 +538,11 @@ if __name__ == "__main__":
             n = int(argv[1])
         except:
             pass
+    nai = 0
+    if len(argv) > 2:
+        try:
+            nai = int(argv[2])
+        except:
+            pass
     tkb = TkBoard()
-    tkb.new_game()
+    tkb.new_game(n, nai)
