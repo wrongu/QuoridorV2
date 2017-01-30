@@ -1,6 +1,7 @@
 import numpy as np
 from collections import defaultdict
 from operator import itemgetter
+from quoridor import encode_loc
 INFINITY = 1e9
 
 
@@ -77,6 +78,15 @@ def monte_carlo_tree_search(game, eval_fn, policy_fn, max_depth=10, n_search=100
     player = game.current_player
     mv_scores = defaultdict(lambda: 0)
     n_visit = defaultdict(lambda: 0)
+
+    # If all players are out of walls, simply step along the shortest path (careful about jumping
+    # situations though).
+    if sum(p[1] for p in game.players) == 0:
+        shortest_path = game.get_graph().get_path()
+        shortest_path_step = next(shortest_path)
+        mv = encode_loc(shortest_path_step)
+        if game.is_legal(mv):
+            return mv
 
     def sample_move(game):
         moves, probabilities = zip(*policy_fn(game))
