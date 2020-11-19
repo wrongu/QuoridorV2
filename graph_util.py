@@ -183,24 +183,24 @@ class PathGraph(object):
             if next is not None:
                 dist = self._dist[node]
                 if next is not None and next not in self._graph[node] and node not in self._sinks:
-                    print "INCONSISTENCY: connectivity of graph and downhill.", node, next
+                    print("INCONSISTENCY: connectivity of graph and downhill.", node, next)
                     err = True
                 if next is not None and node not in self._graph[next] and next not in self._sinks:
-                    print "INCONSISTENCY: reverse connectivity of graph and downhill."
+                    print("INCONSISTENCY: reverse connectivity of graph and downhill.")
                     err = True
                 if node not in self._sinks and next is not None and node not in self._uphill[next]:
-                    print "INCONSISTENCY:", node, "not in uphill[downhill[", node, "]]"
+                    print("INCONSISTENCY:", node, "not in uphill[downhill[", node, "]]")
                     err = True
                 if node not in self._sinks and next is not None and dist != self._dist[next] + 1:
-                    print "INCONSISTENCY: path lengths", node, dist, "->", next, self._dist[next]
+                    print("INCONSISTENCY: path lengths", node, dist, "->", next, self._dist[next])
                     err = True
         for (node, parents) in self._uphill.items():
             for par in parents:
                 if self._downhill[par] is None:
-                    print "INCONSISTENCY: uphill exists but not reciprocated"
+                    print("INCONSISTENCY: uphill exists but not reciprocated")
                     err = True
                 elif self._downhill[par] != node:
-                    print "INCONSISTENCY:", node, "not in downhill[uphill[", node, "]]"
+                    print("INCONSISTENCY:", node, "not in downhill[uphill[", node, "]]")
                     err = True
         if err:
             import pdb

@@ -1,4 +1,4 @@
-from Tkinter import *
+from tkinter import *
 from math import floor
 from quoridor import *
 from features import simple_policy, simple_value
@@ -357,15 +357,15 @@ class TkBoard(object):
             winner = self.game.get_winner()
             if winner is not None:
                 self.game_over = True
-                print "GAME OVER"
+                print("GAME OVER")
             self.refresh()
             if self.game.current_player in self.ai_players:
                 self.start_ai(self.game.current_player)
             return True
         except IllegalMove:
-            print "ILLEGAL MOVE: %s" % turn_str
+            print("ILLEGAL MOVE: %s" % turn_str)
             return False
-        print "FAILED"
+        print("FAILED")
         return False
 
     def start_ai(self, player_idx):
@@ -374,12 +374,12 @@ class TkBoard(object):
                                          self.ai_depth, self.ai_n_playout)
             self.ai_running = False
             self.exec_wrapper(mv, is_ai=True)
-            print "AI FINISHED"
+            print("AI FINISHED")
         self.ai_threads[player_idx] = Thread(target=get_and_exec_move, args=(deepcopy(self.game),))
         self.ai_threads[player_idx].daemon = True
         self.ai_running = True
         self.ai_threads[player_idx].start()
-        print "AI STARTED"
+        print("AI STARTED")
 
     def draw_squares(self):
         for r in range(9):
@@ -540,7 +540,7 @@ class TkBoard(object):
         return "#" + hex_r + hex_g + hex_b
 
     def disp_time_stats(self):
-        print self.time_stats
+        print(self.time_stats)
 
 if __name__ == "__main__":
     import argparse
