@@ -118,7 +118,7 @@ class TkBoard(object):
         self.game = Quoridor()
         self.save_file = save_file
         if load_file is not None:
-            self.game = Quoridor.load(load_file)
+            self.game = Quoridor.load(load_file, undo_all=True)
         self.players = [(None, None)] * len(self.game.players)
         self.max_walls = self.game.players[0][1]
         self.wall_labels = [None] * len(self.game.players)

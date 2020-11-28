@@ -442,10 +442,12 @@ class Quoridor(object):
         """
         return self._pathgraphs[self.current_player if player_idx is None else player_idx]
 
-    def save(self, filename):
-        """Save moves to a file.
+    def save(self, filename, header=""):
+        """Save history of moves to a file.
         """
         with open(filename, "w") as f:
+            if header:
+                f.write("# " + header + "\n")
             f.write(str(len(self.players)) + "\n")
             for mv in self.history:
                 if type(mv) is tuple:
@@ -453,14 +455,23 @@ class Quoridor(object):
                 f.write(mv + "\n")
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, undo_all=False):
         game = cls()
         with open(filename, "r") as f:
             lines = [l.strip() for l in f.readlines()]
+        # Drop header line
+        if lines[0][0] == "#":
+            lines = lines[1:]
+        # First line is # players -- currently only supporting 2
         if int(lines[0]) != 2:
             raise ValueError("Only 2 players allowed.")
+        # Execute all moves in the file
         for mv in lines[1:]:
             game.exec_move(mv)
+        # If 'undo_all' is True, undo all the moves so they're sitting on the 'redo' stack but the game is at the start
+        if undo_all:
+            while len(game.history) > 0:
+                game.undo(allow_redo=True)
         return game
 
     ####################
