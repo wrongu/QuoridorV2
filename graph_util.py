@@ -54,6 +54,8 @@ class PathGraph(object):
 
     def cut(self, pairs):
         """Given pairs of adjacent nodes, cuts connections between them from the graph.
+
+        Automatically updates shortest-paths to sinks for all cut nodes and any "upstream" from them.
         """
         # TODO - optional cache for uncut.
 
@@ -124,6 +126,8 @@ class PathGraph(object):
     def _reroute(self, fro, to):
         """Helper function to route 'fro' through 'to' (assuming it's valid on the graph), updating
            instance variables as necessary.
+
+           All opertations here are "local" - no information is propagated further through the graph.
         """
         self._dist[fro] = self._dist[to] + 1
         self._uphill[self._downhill[fro]].discard(fro)
@@ -156,7 +160,7 @@ class PathGraph(object):
         # nodes.
         border_heap = []
         border = set()
-        # Add all 'border' nodes to the heap.
+        # Add all 'border' nodes to the heap - these are nodes adjacent to the set of severed nodes, but connected.
         for node in severed_nodes:
             for neighbor in self._graph[node]:
                 if neighbor not in severed_nodes and neighbor not in border:
@@ -203,5 +207,4 @@ class PathGraph(object):
                     print("INCONSISTENCY:", node, "not in downhill[uphill[", node, "]]")
                     err = True
         if err:
-            import pdb
-            pdb.set_trace()
+            raise RuntimeError("PathGraph sanity check failed!")
