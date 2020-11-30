@@ -1,45 +1,69 @@
 import torch
 from quoridor import encode_loc, parse_loc, Quoridor
+from typing import Iterable, Union
 
 # TODO - extend to 4-player games? All functions here currently assume 2-player
+# TODO - make batch operations
 
-def encode_state_to_planes(quoridor_games) -> torch.Tensor:
-    """Encode an instance or iterable instances of Quoridor objects into feature planes for input into a neural net.
+def flip_y_perspective(row:int, current_player:int, is_vwall:bool=False)->int:
+    """Flip row coordinates for player 1 so that -- no matter who the 'current player' is -- the enemy's gate is down.
 
-    The feature planes directly encode the state: one 1-hot plane for each player, 1 plane for horizontal walls, and one
-    for vertical wall locations. The 'current' player is always on plane 0 with goals at row [-1]
+    Note that flip_y_perspective is its own inverse, so flip_y_perspective(flip_y_perspective(r, c, v), c, v) == r
     """
-    # Ensure iterable list
-    if isinstance(quoridor_games, Quoridor):
-        quoridor_games = [quoridor_games]
+    # Since vertical walls are labeled by their 'top' coordinate, we need a slightly different rule. This is because
+    # what was the 'bottom' coordinate at (row+1) will become the top coordinate.
+    if current_player == 0:
+        return row
+    elif is_vwall:
+        # Essentially 8-(row+1) to flip 'bottom' of wall to 'top'
+        return 7-row
+    else:
+        return 8-row
 
-    def _game_to_planes(game):
-        _planes = torch.zeros(4, 9, 9)
+def encode_state_to_planes(game:Quoridor) -> torch.Tensor:
+    """Encode an instance of a Quoridor object into feature planes for input into a neural net.
 
-        # Current player on plane 0
-        cur_row, cur_col = game.players[game.current_player][0]
-        _planes[0, cur_row if game.current_player == 0 else 8-cur_row, cur_col] = 1
+    The feature planes directly encode the state:
+    - plane [0] is a one 1-hot plane for the location of the current player, oriented with goals in the last row
+    - plane [1] is flooded with all the same value, set equal to the number of walls the current player has remaining
+    - planes [2] and [3] are the same, but for the opponent. The board is oriented the same as the 0th plane.
+    - plane [4] contains two '1' entries everywhere a horizontal wall has been placed
+    - plane [5] similarly contains all the vertical walls
+    wall locations, and one for vertical wall locations. The 'current' player is always on plane 0 with goals at the
+    last row, and the 'other' player is on plane 1 with goals at the 0th row.
+    """
 
-        # Other player(s) on plane 1
-        for i in range(len(game.players)):
-            if i == game.current_player: continue
-            other_row, other_col = game.players[i][0]
-            _planes[1, other_row if game.current_player == 0 else 8-other_row, other_col] = 1
+    planes = torch.zeros(6, 9, 9)
 
-        # Horizontal walls on plane 2, vertical walls on plane 3
-        for w in game.walls:
-            (row, col) = parse_loc(w[:2])
-            if w[2] == 'h':
-                _planes[2, row if game.current_player == 0 else 8-row, col] = 1
-            elif w[2] == 'v':
-                _planes[3, row if game.current_player == 0 else 7-row, col] = 1
+    # Current player on planes 0 and 1
+    (cur_row, cur_col), cur_walls = game.players[game.current_player]
+    planes[0, flip_y_perspective(cur_row, game.current_player), cur_col] = 1
+    planes[1, :, :] = cur_walls
 
-        return _planes
+    # Other player(s) on planes 2 and 3
+    (other_row, other_col), other_walls = game.players[1-game.current_player]
+    planes[2, flip_y_perspective(other_row, game.current_player), other_col] = 1
+    planes[3, :, :] = other_walls
 
-    # Stack features along batch dimension
-    return torch.stack([_game_to_planes(game) for game in quoridor_games], dim=0)
+    # Horizontal walls on plane 4, vertical walls on plane 5, again oriented to the perspective of the current player
+    for w in game.walls:
+        (row, col) = parse_loc(w[:2])
+        if w[2] == 'h':
+            planes[4, flip_y_perspective(row, game.current_player), col] = 1
+            planes[4, flip_y_perspective(row, game.current_player), col+1] = 1
+        elif w[2] == 'v':
+            planes[5, flip_y_perspective(row, game.current_player, True), col] = 1
+            planes[5, flip_y_perspective(row, game.current_player, True)+1, col] = 1
+
+    return planes
 
 def action_to_coordinate(action:str, current_player:int) -> tuple:
+    """Given an action string (like 'b4' for pawn movement or 'd4h' for a wall), return the (plane, row, col) index into
+    a policy tensor indexing that action. A policy tensor P has shape (3, 9, 9), where P[0] indicates movement to
+    corresponding spaces on the board, P[1] indicates placement of a horizontal wall, and P[2] is vertical walls.
+
+    Note that all of P[2:3, 8, :] and P[2:3, :, 8] (last row and col of walls) are all illegal moves.
+    """
     if len(action) == 2:
         row, col = parse_loc(action)
         plane = 0
@@ -49,55 +73,60 @@ def action_to_coordinate(action:str, current_player:int) -> tuple:
         plane = 1 if action[2] == 'h' else 2
     else:
         raise ValueError("Invalid action: {}".format(action))
-    return (plane, row if current_player == 0 else 8-row, col)
 
-def encode_action_to_planes(actions, current_player:int) -> torch.Tensor:
+    # If current player is 1, then all y coordinates (rows) are flipped.
+    return (plane, flip_y_perspective(row, current_player, action[-1] == 'v'), col)
+
+def encode_actions_to_planes(actions:Union[Iterable[str], str], current_player:int) -> torch.Tensor:
+    """Given an action string (like 'b4' for pawn movement or 'd4h' for a wall), return the 1-hot encoding of it as a
+    policy tensor. Given an iterable of actions, return the union of all such tensors.
+
+    A policy tensor P has shape (3, 9, 9), where P[0] indicates movement to corresponding spaces on the board, P[1]
+    indicates placement of a horizontal wall, and P[2] is vertical walls.
+
+    Note that all of P[2:3, 8, :] and P[2:3, :, 8] (last row and col of walls) are all illegal moves.
+    """
+    # Make it iterable
     if isinstance(actions, str):
-        actions = [actions]
+        actions = (actions,)
 
-    # Stack action planes along batch dimension
-    planes = [torch.zeros(3, 9, 9) for _ in actions]
-    for i, act in enumerate(actions):
-        planes[i][action_to_coordinate(act, current_player)] = 1
+    # Encode each action in the list with a '1'
+    planes = torch.zeros(3, 9, 9)
+    for move in actions:
+        planes[action_to_coordinate(move, current_player)] = 1
+    return planes
 
-    return torch.stack(planes, dim=0)
+def sample_action(policy_planes:torch.Tensor, current_player:int, temperature=1.0) -> str:
+    """Sample an action from the given (3 x 9 x 9) policy. Behavior depends on the current_player because the policy is
+    always from the perspective of the current player, while actions are in global board coordinates.
 
-def decode_to_action(policy_planes:torch.Tensor, current_player:int, temperature=1.0, legal_moves=None):
-    if len(policy_planes.size()) == 3:
-        # Single batch - add a unit batch dimension in-place
-        policy_planes.unsqueeze_(dim=0)
-
-    # Enforce legality by creating a mask on the policy output.
-    if legal_moves is None:
-        legal_mask = torch.ones_like(policy_planes[0])
-    else:
-        legal_mask = torch.zeros_like(policy_planes[0])
-        for mv in legal_moves:
-            legal_mask[action_to_coordinate(mv, current_player)] = 1
-
-    def _idx_to_action(idx:int):
+    Assuming 'policy_planes' contains all non-negative entries. This function performs no legality checks -- to enforce
+    move legality, first multiply a policy by a mask that zeros out illegal moves.
+    """
+    def _idx_to_action(idx:int)->str:
         """Policy planes are [3 x 9 x 9] where plane [0] is movement, [1] is horizontal walls, and [2] is vertical walls
+
+        This function takes a 1D flattened index in [0,243) and returns an action in appropriately transformed coords.
         """
         if idx < 0 or idx >= 3*9*9:
             raise ValueError("Action index out of bounds!")
         plane, row, col = idx // 81, (idx % 81) // 9, idx % 9
-        if plane == 0:
-            return encode_loc(row if current_player==0 else 8-row, col)
-        elif plane == 1:
-            return encode_loc(row if current_player==0 else 8-row, col)+"h"
-        else:
-            return encode_loc(row if current_player==0 else 7-row, col)+"v"
 
-    num_batches = policy_planes.size()[0]
-    actions = [None] * num_batches
-    for b in range(num_batches):
-        if temperature < 1e-6:
-            # Do max operation instead of unstable low-temperature manipulations
-            idx = torch.argmax(policy_planes[b])
+        # Note that flip_y_perspective is its own inverse, so it works both for translating from boards to tensors and
+        # back again (here we're doing the back again part)
+        if plane == 0:
+            return encode_loc(flip_y_perspective(row, current_player), col)
+        elif plane == 1:
+            return encode_loc(flip_y_perspective(row, current_player), col)+"h"
         else:
-            idx = torch.multinomial((policy_planes[b] * legal_mask).flatten()**temperature, num_samples=1)
-        actions[b] = _idx_to_action(idx.item())
-    return actions
+            return encode_loc(flip_y_perspective(row, current_player, True), col)+"v"
+
+    if temperature < 1e-6:
+        # Do max operation instead of unstable low-temperature manipulations
+        idx = torch.argmax(policy_planes)
+    else:
+        idx = torch.multinomial((policy_planes).flatten()**temperature, num_samples=1)
+    return _idx_to_action(idx.item())
 
 if __name__ == '__main__':
     # mini test
@@ -108,17 +137,20 @@ if __name__ == '__main__':
     print(legal_moves)
 
     for mv in legal_moves:
-        planes = encode_action_to_planes(mv, q.current_player)
+        planes = encode_actions_to_planes(mv, q.current_player)
         print("=========== {} ============".format(mv))
-        print(planes[0])
-        mv2 = decode_to_action(planes, 0)[0]
+        print(planes)
+        mv2 = sample_action(planes, 0)
         print(mv2)
         assert mv2 == mv, "Failed to encode/decode {}".format(mv)
 
     # Test that just sampling random moves leads to some illegal moves getting selected (this is expected)
-    rand_policy = torch.rand(100, 3, 9, 9)
-    random_actions = decode_to_action(rand_policy, 0)
-    masked_random_actions = decode_to_action(rand_policy, 0, legal_moves=legal_moves)
+    random_actions, masked_random_actions = ['']*100, ['']*100
+    legal_mask = encode_actions_to_planes(legal_moves, q.current_player)
+    for i in range(100):
+        rand_policy = torch.rand(3, 9, 9)
+        random_actions[i] = sample_action(rand_policy, 0)
+        masked_random_actions[i] = sample_action(rand_policy * legal_mask, 0)
 
     print("RANDOM policy selected the following illegal actions:")
     print(set(random_actions) - set(legal_moves))
@@ -135,15 +167,16 @@ if __name__ == '__main__':
     q.exec_move('d4h')
     q.exec_move('h3v')
     q.exec_move('h8v')
-    planes0 = encode_state_to_planes(q)[0]
+    planes0 = encode_state_to_planes(q)
     q.current_player = 1
-    planes1 = encode_state_to_planes(q)[0]
+    planes1 = encode_state_to_planes(q)
 
     print(planes0)
     print(planes1)
 
-    # Test that plane 0 is 'current' player and flipped direction
-    assert torch.all(planes0[0] == torch.flipud(planes1[1]))
-    assert torch.all(planes0[1] == torch.flipud(planes1[0]))
-    assert torch.all(planes0[2] == torch.flipud(planes1[2]))
-    assert torch.all(planes0[3][:8, :] == torch.flipud(planes1[3][:8, :]))
+    # Test that plane 0 is 'current' player and flipped direction from perspective of other player
+    assert torch.all(planes0[0] == torch.flipud(planes1[2]))
+    assert torch.all(planes0[2] == torch.flipud(planes1[0]))
+    # Test that walls are vertically flipped between two players' perspectives
+    assert torch.all(planes0[4] == torch.flipud(planes1[4]))
+    assert torch.all(planes0[5] == torch.flipud(planes1[5]))
