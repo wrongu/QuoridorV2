@@ -209,19 +209,12 @@ class Quoridor(object):
     def __eq__(self, other):
         """Return True iff the current state of this Quoridor object matches another object (ignoring history)
         """
-        return isinstance(other, Quoridor) and self.__key() == other.__key()
+        return isinstance(other, Quoridor) and self.hash_key() == other.hash_key()
 
     def __hash__(self):
         """Provide a hash function that simply hashes the output of __key.
         """
-        return hash(self.__key())
-
-    def __key(self):
-        """Create a unique identifier for the present state of the game (history-free).
-
-        A hashable key must be immutable, hence the use of tuples and frozen sets.
-        """
-        return (self.current_player, frozenset(self.walls), tuple(map(tuple, self.players)))
+        return hash(self.hash_key())
 
     ###########################
     # PUBLIC-FACING FUNCTIONS #
@@ -441,6 +434,13 @@ class Quoridor(object):
         """Return the PathGraph object associated with the current player (or the player at index player_idx if given)
         """
         return self._pathgraphs[self.current_player if player_idx is None else player_idx]
+
+    def hash_key(self):
+        """Create a unique identifier for the present state of the game (history-free).
+
+        A hashable key must be immutable, hence the use of tuples and frozen sets.
+        """
+        return (self.current_player, frozenset(self.walls), tuple(map(tuple, self.players)))
 
     def save(self, filename, header=""):
         """Save history of moves to a file.
