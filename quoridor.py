@@ -32,7 +32,7 @@ for row in range(BOARD_SIZE):
 # Construct dict mapping from each wall to the set of walls that it physically rules out (including itself).
 INTERSECTING_WALLS = {}
 for wall in ALL_WALLS:
-    INTERSECTING_WALLS[wall] = set([wall, cross(wall)])
+    INTERSECTING_WALLS[wall] = {wall, cross(wall)}
     (row, col) = parse_loc(wall[0:2])
     if wall[2] == 'v':
         if row > 0:
@@ -207,12 +207,21 @@ class Quoridor(object):
         self._open_walls = set(ALL_WALLS)
 
     def __eq__(self, other):
-        """Return True iff the current state of this Quoridor object matches another object (ignoring history)
+        """Return True iff the current state of this Quoridor object matches another object (ignoring history).
+
+        Note that by defining __hash__ and __eq__, Quoridor objects may be used as dictionary keys.
         """
         return isinstance(other, Quoridor) and self.hash_key() == other.hash_key()
 
+    def __ne__(self, other):
+        # Avoid any confusion on != or ==
+        # See https://stackoverflow.com/a/4901847/1935085
+        return not(self == other)
+
     def __hash__(self):
-        """Provide a hash function that simply hashes the output of __key.
+        """Provide a hash function that simply hashes the output of self.hash_key.
+
+        Note that by defining __hash__ and __eq__, Quoridor objects may be used as dictionary keys.
         """
         return hash(self.hash_key())
 

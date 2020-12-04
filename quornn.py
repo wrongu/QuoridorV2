@@ -125,7 +125,7 @@ def sample_action(policy_planes:torch.Tensor, current_player:int, temperature=1.
         # Do max operation instead of unstable low-temperature manipulations
         idx = torch.argmax(policy_planes)
     else:
-        idx = torch.multinomial((policy_planes).flatten()**temperature, num_samples=1)
+        idx = torch.multinomial(policy_planes.flatten()**temperature, num_samples=1)
     return _idx_to_action(idx.item())
 
 if __name__ == '__main__':
