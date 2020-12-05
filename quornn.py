@@ -5,6 +5,9 @@ from typing import Iterable, Union
 # TODO - extend to 4-player games? All functions here currently assume 2-player
 # TODO - make batch operations
 
+STATE_SHAPE = (6, 9, 9)
+POLICY_SHAPE = (3, 9, 9)
+
 def flip_y_perspective(row:int, current_player:int, is_vwall:bool=False)->int:
     """Flip row coordinates for player 1 so that -- no matter who the 'current player' is -- the enemy's gate is down.
 
@@ -20,7 +23,7 @@ def flip_y_perspective(row:int, current_player:int, is_vwall:bool=False)->int:
     else:
         return 8-row
 
-def encode_state_to_planes(game:Quoridor) -> torch.Tensor:
+def encode_state_to_planes(game:Quoridor, add_batch=False, out:torch.Tensor=None) -> torch.Tensor:
     """Encode an instance of a Quoridor object into feature planes for input into a neural net.
 
     The feature planes directly encode the state:
@@ -33,29 +36,35 @@ def encode_state_to_planes(game:Quoridor) -> torch.Tensor:
     last row, and the 'other' player is on plane 1 with goals at the 0th row.
     """
 
-    planes = torch.zeros(6, 9, 9)
+    if out is None:
+        out = torch.zeros(6, 9, 9)
+    else:
+        out.fill_(0.0)
 
-    # Current player on planes 0 and 1
+    # Current player on out 0 and 1
     (cur_row, cur_col), cur_walls = game.players[game.current_player]
-    planes[0, flip_y_perspective(cur_row, game.current_player), cur_col] = 1
-    planes[1, :, :] = cur_walls
+    out[0, flip_y_perspective(cur_row, game.current_player), cur_col] = 1
+    out[1, :, :] = cur_walls
 
     # Other player(s) on planes 2 and 3
     (other_row, other_col), other_walls = game.players[1-game.current_player]
-    planes[2, flip_y_perspective(other_row, game.current_player), other_col] = 1
-    planes[3, :, :] = other_walls
+    out[2, flip_y_perspective(other_row, game.current_player), other_col] = 1
+    out[3, :, :] = other_walls
 
     # Horizontal walls on plane 4, vertical walls on plane 5, again oriented to the perspective of the current player
     for w in game.walls:
         (row, col) = parse_loc(w[:2])
         if w[2] == 'h':
-            planes[4, flip_y_perspective(row, game.current_player), col] = 1
-            planes[4, flip_y_perspective(row, game.current_player), col+1] = 1
+            out[4, flip_y_perspective(row, game.current_player), col] = 1
+            out[4, flip_y_perspective(row, game.current_player), col+1] = 1
         elif w[2] == 'v':
-            planes[5, flip_y_perspective(row, game.current_player, True), col] = 1
-            planes[5, flip_y_perspective(row, game.current_player, True)+1, col] = 1
+            out[5, flip_y_perspective(row, game.current_player, True), col] = 1
+            out[5, flip_y_perspective(row, game.current_player, True)+1, col] = 1
 
-    return planes
+    if add_batch:
+        return out.unsqueeze(0)
+    else:
+        return out
 
 def action_to_coordinate(action:str, current_player:int) -> tuple:
     """Given an action string (like 'b4' for pawn movement or 'd4h' for a wall), return the (plane, row, col) index into
@@ -77,7 +86,7 @@ def action_to_coordinate(action:str, current_player:int) -> tuple:
     # If current player is 1, then all y coordinates (rows) are flipped.
     return (plane, flip_y_perspective(row, current_player, action[-1] == 'v'), col)
 
-def encode_actions_to_planes(actions:Union[Iterable[str], str], current_player:int) -> torch.Tensor:
+def encode_actions_to_planes(actions:Union[Iterable[str], str], current_player:int, out:torch.Tensor=None) -> torch.Tensor:
     """Given an action string (like 'b4' for pawn movement or 'd4h' for a wall), return the 1-hot encoding of it as a
     policy tensor. Given an iterable of actions, return the union of all such tensors.
 
@@ -91,10 +100,13 @@ def encode_actions_to_planes(actions:Union[Iterable[str], str], current_player:i
         actions = (actions,)
 
     # Encode each action in the list with a '1'
-    planes = torch.zeros(3, 9, 9)
+    if out is None:
+        out = torch.zeros(3, 9, 9)
+    else:
+        out.fill_(0.0)
     for move in actions:
-        planes[action_to_coordinate(move, current_player)] = 1
-    return planes
+        out[action_to_coordinate(move, current_player)] = 1
+    return out
 
 def sample_action(policy_planes:torch.Tensor, current_player:int, temperature=1.0) -> str:
     """Sample an action from the given (3 x 9 x 9) policy. Behavior depends on the current_player because the policy is
